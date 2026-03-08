@@ -29,6 +29,16 @@ cd ../frontend
 npm install
 ```
 
+### 3. Run Backend & Frontend Together
+
+Use the following command from the project root to start both backend and frontend concurrently:
+
+```bash
+npx concurrently "node backend/server.js" "npm run dev --prefix frontend"
+```
+
+This will start the backend server (on port 5001) and the frontend (on port 5173) simultaneously.
+
 ### 3. Configure Environment Variables
 
 The `backend/.env` file is already configured with:
