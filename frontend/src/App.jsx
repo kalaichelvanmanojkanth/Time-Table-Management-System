@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -14,52 +14,62 @@ import ProductList from './pages/ProductList';
 import CreateProduct from './pages/CreateProduct';
 import EditProduct from './pages/EditProduct';
 
+/* Hide the legacy Navbar on the homepage — Home.jsx has its own premium navbar */
+function AppShell() {
+  const { pathname } = useLocation();
+  const showNavbar = pathname !== '/';
+
+  return (
+    <div className="app">
+      {showNavbar && <Navbar />}
+      <main className={showNavbar ? 'main-content' : ''}>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <div className="container">
+                  <Dashboard />
+                </div>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/products" element={<div className="container"><ProductList /></div>} />
+          <Route
+            path="/products/new"
+            element={
+              <ProtectedRoute>
+                <div className="container">
+                  <CreateProduct />
+                </div>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/products/:id/edit"
+            element={
+              <ProtectedRoute>
+                <div className="container">
+                  <EditProduct />
+                </div>
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </main>
+      <ToastContainer position="bottom-right" autoClose={3000} />
+    </div>
+  );
+}
+
 function App() {
   return (
     <Router>
       <AuthProvider>
-        <div className="app">
-          <Navbar />
-          <main className="main-content">
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute>
-                    <div className="container">
-                      <Dashboard />
-                    </div>
-                  </ProtectedRoute>
-                }
-              />
-              <Route path="/products" element={<div className="container"><ProductList /></div>} />
-              <Route
-                path="/products/new"
-                element={
-                  <ProtectedRoute>
-                    <div className="container">
-                      <CreateProduct />
-                    </div>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/products/:id/edit"
-                element={
-                  <ProtectedRoute>
-                    <div className="container">
-                      <EditProduct />
-                    </div>
-                  </ProtectedRoute>
-                }
-              />
-            </Routes>
-          </main>
-          <ToastContainer position="bottom-right" autoClose={3000} />
-        </div>
+        <AppShell />
       </AuthProvider>
     </Router>
   );
