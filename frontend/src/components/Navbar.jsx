@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { FaBox, FaSignOutAlt, FaUser, FaBars, FaTimes } from 'react-icons/fa';
+import { FaCalendarAlt, FaSignOutAlt, FaUser, FaBars, FaTimes } from 'react-icons/fa';
 import { useState } from 'react';
 
 const Navbar = () => {
@@ -18,7 +18,7 @@ const Navbar = () => {
     <nav className="navbar">
       <div className="navbar-container">
         <Link to="/" className="navbar-brand">
-          <FaBox /> MERN Store
+          <FaCalendarAlt /> Smart TMS
         </Link>
 
         <button
