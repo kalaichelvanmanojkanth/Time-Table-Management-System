@@ -19,10 +19,16 @@ import SubjectDistribution from './pages/analytics/SubjectDistribution';
 import ResourceUtilization from './pages/analytics/ResourceUtilization';
 import Reports from './pages/analytics/Reports';
 
+import AISchedulingIndex from './pages/ai-scheduling/AISchedulingIndex';
+import AISchedulingSetup from './pages/ai-scheduling/AISchedulingSetup';
+import ConflictDetection from './pages/ai-scheduling/ConflictDetection';
+import OptimizationSuggestions from './pages/ai-scheduling/OptimizationSuggestions';
+import TimetableAnalytics from './pages/ai-scheduling/TimetableAnalytics';
+
 /* Hide the legacy Navbar on the homepage — Home.jsx has its own premium navbar */
 function AppShell() {
   const { pathname } = useLocation();
-  const showNavbar = pathname !== '/' && !pathname.startsWith('/analytics');
+  const showNavbar = pathname !== '/' && !pathname.startsWith('/analytics') && !pathname.startsWith('/ai-scheduling');
 
   return (
     <div className="app">
@@ -68,6 +74,13 @@ function AppShell() {
           <Route path="/analytics/subject-distribution" element={<SubjectDistribution />} />
           <Route path="/analytics/resource-utilization" element={<ResourceUtilization />} />
           <Route path="/analytics/reports" element={<Reports />} />
+
+          {/* AI Scheduling Module */}
+          <Route path="/ai-scheduling" element={<AISchedulingIndex />} />
+          <Route path="/ai-scheduling/setup" element={<AISchedulingSetup />} />
+          <Route path="/ai-scheduling/conflicts" element={<ConflictDetection />} />
+          <Route path="/ai-scheduling/optimization" element={<OptimizationSuggestions />} />
+          <Route path="/ai-scheduling/analytics" element={<TimetableAnalytics />} />
         </Routes>
       </main>
       <ToastContainer position="bottom-right" autoClose={3000} />

@@ -99,6 +99,7 @@ const FEATURES = [
     color: 'from-secondary to-violet-700',
     glow: 'group-hover:shadow-[0_0_24px_rgba(99,102,241,0.3)]',
     ring: 'group-hover:ring-indigo-300 dark:group-hover:ring-indigo-700',
+    link: '/ai-scheduling',
   },
   {
     icon: <FaChartBar />,
@@ -245,7 +246,7 @@ function FeatureCard({ icon, title, desc, color, glow, ring, link, delay }) {
       <p className="relative text-muted dark:text-slate-400 text-sm leading-relaxed">{desc}</p>
       {link && (
         <div className="relative mt-4 flex items-center gap-1 text-xs font-bold text-primary dark:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-          View Analytics →
+          {link === '/ai-scheduling' ? 'AI Scheduling →' : 'View Analytics →'}
         </div>
       )}
     </div>
@@ -254,7 +255,7 @@ function FeatureCard({ icon, title, desc, color, glow, ring, link, delay }) {
   return (
     <Reveal delay={delay}>
       {link
-        ? <Link to={link} className="block" id="feature-analytics-link">{cardContent}</Link>
+        ? <Link to={link} className="block" id={`feature-card-link-${link.replace(/\//g, '-').slice(1)}`}>{cardContent}</Link>
         : cardContent
       }
     </Reveal>
