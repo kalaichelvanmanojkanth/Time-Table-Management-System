@@ -107,6 +107,7 @@ const FEATURES = [
     color: 'from-cyan-500 to-accent',
     glow: 'group-hover:shadow-[0_0_24px_rgba(34,211,238,0.3)]',
     ring: 'group-hover:ring-cyan-300 dark:group-hover:ring-cyan-700',
+    link: '/analytics',
   },
   {
     icon: <FaBuilding />,
@@ -142,21 +143,21 @@ const HOW_IT_WORKS = [
   },
 ];
 
-const DAYS  = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const SLOTS = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00'];
 const SCHEDULE = {
-  Mon: { '08:00': { label: 'Algorithms',     room: 'A101', tw: 'bg-blue-50 dark:bg-blue-950/50 border-l-blue-500 text-blue-700 dark:text-blue-300' }, '10:00': { label: 'Data Structures', room: 'B202', tw: 'bg-violet-50 dark:bg-violet-950/50 border-l-violet-500 text-violet-700 dark:text-violet-300' }, '13:00': { label: 'Networks',       room: 'C301', tw: 'bg-cyan-50 dark:bg-cyan-950/50 border-l-cyan-500 text-cyan-700 dark:text-cyan-300' } },
-  Tue: { '09:00': { label: 'OS Concepts',    room: 'A102', tw: 'bg-amber-50 dark:bg-amber-950/50 border-l-amber-500 text-amber-700 dark:text-amber-300' }, '11:00': { label: 'Math III',       room: 'B201', tw: 'bg-emerald-50 dark:bg-emerald-950/50 border-l-emerald-500 text-emerald-700 dark:text-emerald-300' } },
-  Wed: { '08:00': { label: 'Algorithms',     room: 'A101', tw: 'bg-blue-50 dark:bg-blue-950/50 border-l-blue-500 text-blue-700 dark:text-blue-300' }, '12:00': { label: 'Databases',      room: 'D101', tw: 'bg-rose-50 dark:bg-rose-950/50 border-l-rose-500 text-rose-700 dark:text-rose-300' } },
-  Thu: { '09:00': { label: 'AI & ML',        room: 'E201', tw: 'bg-violet-50 dark:bg-violet-950/50 border-l-violet-500 text-violet-700 dark:text-violet-300' }, '13:00': { label: 'OS Concepts',  room: 'A102', tw: 'bg-amber-50 dark:bg-amber-950/50 border-l-amber-500 text-amber-700 dark:text-amber-300' } },
-  Fri:  { '10:00': { label: 'Networks',      room: 'C301', tw: 'bg-cyan-50 dark:bg-cyan-950/50 border-l-cyan-500 text-cyan-700 dark:text-cyan-300'  }, '11:00': { label: 'Databases',      room: 'D101', tw: 'bg-rose-50 dark:bg-rose-950/50 border-l-rose-500 text-rose-700 dark:text-rose-300' } },
+  Mon: { '08:00': { label: 'Algorithms', room: 'A101', tw: 'bg-blue-50 dark:bg-blue-950/50 border-l-blue-500 text-blue-700 dark:text-blue-300' }, '10:00': { label: 'Data Structures', room: 'B202', tw: 'bg-violet-50 dark:bg-violet-950/50 border-l-violet-500 text-violet-700 dark:text-violet-300' }, '13:00': { label: 'Networks', room: 'C301', tw: 'bg-cyan-50 dark:bg-cyan-950/50 border-l-cyan-500 text-cyan-700 dark:text-cyan-300' } },
+  Tue: { '09:00': { label: 'OS Concepts', room: 'A102', tw: 'bg-amber-50 dark:bg-amber-950/50 border-l-amber-500 text-amber-700 dark:text-amber-300' }, '11:00': { label: 'Math III', room: 'B201', tw: 'bg-emerald-50 dark:bg-emerald-950/50 border-l-emerald-500 text-emerald-700 dark:text-emerald-300' } },
+  Wed: { '08:00': { label: 'Algorithms', room: 'A101', tw: 'bg-blue-50 dark:bg-blue-950/50 border-l-blue-500 text-blue-700 dark:text-blue-300' }, '12:00': { label: 'Databases', room: 'D101', tw: 'bg-rose-50 dark:bg-rose-950/50 border-l-rose-500 text-rose-700 dark:text-rose-300' } },
+  Thu: { '09:00': { label: 'AI & ML', room: 'E201', tw: 'bg-violet-50 dark:bg-violet-950/50 border-l-violet-500 text-violet-700 dark:text-violet-300' }, '13:00': { label: 'OS Concepts', room: 'A102', tw: 'bg-amber-50 dark:bg-amber-950/50 border-l-amber-500 text-amber-700 dark:text-amber-300' } },
+  Fri: { '10:00': { label: 'Networks', room: 'C301', tw: 'bg-cyan-50 dark:bg-cyan-950/50 border-l-cyan-500 text-cyan-700 dark:text-cyan-300' }, '11:00': { label: 'Databases', room: 'D101', tw: 'bg-rose-50 dark:bg-rose-950/50 border-l-rose-500 text-rose-700 dark:text-rose-300' } },
 };
 
 const STATS = [
-  { label: 'Active Sections', value: '24', delta: '+3 this week',  color: 'text-primary dark:text-blue-400' },
-  { label: 'Classrooms',      value: '18', delta: '94% utilized',  color: 'text-accent dark:text-cyan-400'  },
-  { label: 'Conflicts',       value: '0',  delta: 'Fully resolved', color: 'text-emerald-500'               },
-  { label: 'Faculty',         value: '42', delta: 'All assigned',   color: 'text-secondary dark:text-indigo-400' },
+  { label: 'Active Sections', value: '24', delta: '+3 this week', color: 'text-primary dark:text-blue-400' },
+  { label: 'Classrooms', value: '18', delta: '94% utilized', color: 'text-accent dark:text-cyan-400' },
+  { label: 'Conflicts', value: '0', delta: 'Fully resolved', color: 'text-emerald-500' },
+  { label: 'Faculty', value: '42', delta: 'All assigned', color: 'text-secondary dark:text-indigo-400' },
 ];
 
 const BAR_DATA = [
@@ -166,9 +167,9 @@ const BAR_DATA = [
 
 const BENEFITS = [
   { icon: <FaExclamationTriangle />, title: 'Reduce Scheduling Conflicts', desc: 'AI detects and resolves all scheduling conflicts automatically before publication.' },
-  { icon: <FaClock />,               title: 'Save Time with Automation',   desc: 'Reduce semester scheduling from weeks to minutes with intelligent automation.'  },
-  { icon: <FaDoorOpen />,            title: 'Improve Resource Utilization', desc: 'Maximize room and equipment utilization across your entire campus network.'    },
-  { icon: <FaLightbulb />,           title: 'Data-Driven Decisions',        desc: 'Actionable analytics surface patterns and gaps to improve long-term planning.'  },
+  { icon: <FaClock />, title: 'Save Time with Automation', desc: 'Reduce semester scheduling from weeks to minutes with intelligent automation.' },
+  { icon: <FaDoorOpen />, title: 'Improve Resource Utilization', desc: 'Maximize room and equipment utilization across your entire campus network.' },
+  { icon: <FaLightbulb />, title: 'Data-Driven Decisions', desc: 'Actionable analytics surface patterns and gaps to improve long-term planning.' },
 ];
 
 const TESTIMONIALS = [
@@ -233,17 +234,29 @@ function TimetableMock() {
 /* ─────────────────────────────────────────────
    Feature Card
 ───────────────────────────────────────────── */
-function FeatureCard({ icon, title, desc, color, glow, ring, delay }) {
+function FeatureCard({ icon, title, desc, color, glow, ring, link, delay }) {
+  const cardContent = (
+    <div className={`group relative bg-white dark:bg-slate-800 rounded-2xl p-7 border border-slate-100 dark:border-slate-700 shadow-md hover:-translate-y-2 hover:shadow-xl transition-all duration-300 ${link ? 'cursor-pointer' : 'cursor-default'} ring-1 ring-transparent ${ring} ${glow} h-full`}>
+      <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-white dark:from-slate-800 via-white dark:via-slate-800 to-blue-50 dark:to-blue-950/30 pointer-events-none" />
+      <div className={`relative w-12 h-12 rounded-xl bg-gradient-to-br ${color} text-white flex items-center justify-center text-xl mb-5 shadow-md group-hover:scale-110 transition-transform duration-300`}>
+        {icon}
+      </div>
+      <h3 className="relative font-bold text-navy dark:text-slate-100 text-[1.05rem] mb-2 leading-snug">{title}</h3>
+      <p className="relative text-muted dark:text-slate-400 text-sm leading-relaxed">{desc}</p>
+      {link && (
+        <div className="relative mt-4 flex items-center gap-1 text-xs font-bold text-primary dark:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+          View Analytics →
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <Reveal delay={delay}>
-      <div className={`group relative bg-white dark:bg-slate-800 rounded-2xl p-7 border border-slate-100 dark:border-slate-700 shadow-md hover:-translate-y-2 hover:shadow-xl transition-all duration-300 cursor-default ring-1 ring-transparent ${ring} ${glow}`}>
-        <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-white dark:from-slate-800 via-white dark:via-slate-800 to-blue-50 dark:to-blue-950/30 pointer-events-none" />
-        <div className={`relative w-12 h-12 rounded-xl bg-gradient-to-br ${color} text-white flex items-center justify-center text-xl mb-5 shadow-md group-hover:scale-110 transition-transform duration-300`}>
-          {icon}
-        </div>
-        <h3 className="relative font-bold text-navy dark:text-slate-100 text-[1.05rem] mb-2 leading-snug">{title}</h3>
-        <p className="relative text-muted dark:text-slate-400 text-sm leading-relaxed">{desc}</p>
-      </div>
+      {link
+        ? <Link to={link} className="block" id="feature-analytics-link">{cardContent}</Link>
+        : cardContent
+      }
     </Reveal>
   );
 }
@@ -301,8 +314,8 @@ function TestimonialCard({ name, role, avatar, avatarColor, text, stars, delay }
 ══════════════════════════════════════════════ */
 const Home = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [scrolled, setScrolled]             = useState(false);
-  const [dark, setDark]                     = useDarkMode();
+  const [scrolled, setScrolled] = useState(false);
+  const [dark, setDark] = useDarkMode();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -822,9 +835,9 @@ const Home = () => {
               <p className="text-sm text-slate-500 mb-4">Follow us for updates, tips, and academic scheduling insights.</p>
               <div className="flex gap-3">
                 {[
-                  { icon: <FaTwitter />, id: 'footer-twitter',  label: 'Twitter'  },
+                  { icon: <FaTwitter />, id: 'footer-twitter', label: 'Twitter' },
                   { icon: <FaLinkedin />, id: 'footer-linkedin', label: 'LinkedIn' },
-                  { icon: <FaGithub />,   id: 'footer-github',   label: 'GitHub'   },
+                  { icon: <FaGithub />, id: 'footer-github', label: 'GitHub' },
                 ].map(({ icon, id, label }) => (
                   <a
                     key={id}
