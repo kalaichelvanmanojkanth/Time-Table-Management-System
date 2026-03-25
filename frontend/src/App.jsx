@@ -13,11 +13,16 @@ import Dashboard from './pages/Dashboard';
 import ProductList from './pages/ProductList';
 import CreateProduct from './pages/CreateProduct';
 import EditProduct from './pages/EditProduct';
+import Analytics from './pages/analytics/Analytics';
+import TeacherWorkload from './pages/analytics/TeacherWorkload';
+import SubjectDistribution from './pages/analytics/SubjectDistribution';
+import ResourceUtilization from './pages/analytics/ResourceUtilization';
+import Reports from './pages/analytics/Reports';
 
 /* Hide the legacy Navbar on the homepage — Home.jsx has its own premium navbar */
 function AppShell() {
   const { pathname } = useLocation();
-  const showNavbar = pathname !== '/';
+  const showNavbar = pathname !== '/' && !pathname.startsWith('/analytics');
 
   return (
     <div className="app">
@@ -58,6 +63,11 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
+          <Route path="/analytics" element={<Analytics />} />
+          <Route path="/analytics/teacher-workload" element={<TeacherWorkload />} />
+          <Route path="/analytics/subject-distribution" element={<SubjectDistribution />} />
+          <Route path="/analytics/resource-utilization" element={<ResourceUtilization />} />
+          <Route path="/analytics/reports" element={<Reports />} />
         </Routes>
       </main>
       <ToastContainer position="bottom-right" autoClose={3000} />
