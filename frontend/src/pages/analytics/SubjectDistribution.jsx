@@ -1,14 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  FaArrowLeft, FaBookOpen, FaExclamationTriangle, FaInfoCircle, FaTimes,
+  FaArrowLeft, FaBookOpen, FaExclamationTriangle, FaInfoCircle,
+  FaTimes, FaEdit, FaTrash, FaCheckCircle, FaTimesCircle, FaPlus, FaSave,
 } from 'react-icons/fa';
 
+/* ── reveal ── */
 function useReveal() {
   const ref = useRef(null);
   useEffect(() => {
     const el = ref.current; if (!el) return;
-    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { el.classList.add('is-visible'); obs.unobserve(el); } }, { threshold: 0.08 });
+    const obs = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) { el.classList.add('is-visible'); obs.unobserve(el); }
+    }, { threshold: 0.08 });
     obs.observe(el); return () => obs.disconnect();
   }, []);
   return ref;
@@ -18,31 +22,107 @@ function Reveal({ children, delay = '0ms', className = '' }) {
   return <div ref={ref} className={`reveal-on-scroll ${className}`} style={{ transitionDelay: delay }}>{children}</div>;
 }
 
-const INITIAL_SUBJECTS = [
-  { id: 1,  name: 'Algorithms',       dept: 'Computer Science', teacher: 'Dr. Anita Sharma',    hoursPerWeek: 4, maxHours: 5, classes: ['CS-A', 'CS-B'] },
-  { id: 2,  name: 'Data Structures',  dept: 'Computer Science', teacher: 'Dr. Anita Sharma',    hoursPerWeek: 3, maxHours: 4, classes: ['CS-A']         },
-  { id: 3,  name: 'Math III',         dept: 'Mathematics',      teacher: 'Prof. Ravi Kumar',    hoursPerWeek: 4, maxHours: 4, classes: ['CS-A', 'EC-A']  },
-  { id: 4,  name: 'Networks',         dept: 'Computer Science', teacher: 'Dr. Preethi Nair',    hoursPerWeek: 3, maxHours: 4, classes: ['CS-B']          },
-  { id: 5,  name: 'OS Concepts',      dept: 'Computer Science', teacher: 'Dr. Preethi Nair',    hoursPerWeek: 3, maxHours: 3, classes: ['CS-A']          },
-  { id: 6,  name: 'Databases',        dept: 'Computer Science', teacher: 'Dr. Meera Krishnan',  hoursPerWeek: 6, maxHours: 4, classes: ['CS-A', 'CS-B']  },
-  { id: 7,  name: 'AI & ML',          dept: 'Computer Science', teacher: 'Dr. Anita Sharma',    hoursPerWeek: 4, maxHours: 4, classes: ['CS-A']          },
-  { id: 8,  name: 'Physics I',        dept: 'Physics',          teacher: 'Mr. Suresh Babu',     hoursPerWeek: 0, maxHours: 3, classes: []                },
-  { id: 9,  name: 'Calculus',         dept: 'Mathematics',      teacher: '',                    hoursPerWeek: 2, maxHours: 3, classes: ['EC-A']          },
-  { id: 10, name: 'Web Dev',          dept: 'Computer Science', teacher: 'Dr. Meera Krishnan',  hoursPerWeek: 3, maxHours: 3, classes: ['CS-B']          },
-  { id: 11, name: 'Cloud Computing',  dept: 'Computer Science', teacher: 'Dr. Meera Krishnan',  hoursPerWeek: 2, maxHours: 3, classes: ['CS-A']          },
-  { id: 12, name: 'Digital Circuits', dept: 'Electronics',      teacher: 'Prof. Karthik Rajan', hoursPerWeek: 2, maxHours: 3, classes: ['EC-A']          },
+/* ══ TOAST ══ */
+const T_STYLE = {
+  success: { bar: 'bg-emerald-500', icon: 'text-emerald-500', ring: 'ring-emerald-100' },
+  warning: { bar: 'bg-amber-400',   icon: 'text-amber-500',   ring: 'ring-amber-100'   },
+  error:   { bar: 'bg-rose-500',    icon: 'text-rose-500',    ring: 'ring-rose-100'    },
+  info:    { bar: 'bg-blue-500',    icon: 'text-blue-500',    ring: 'ring-blue-100'    },
+};
+const T_ICON = {
+  success: <FaCheckCircle />, warning: <FaExclamationTriangle />,
+  error: <FaTimesCircle />,   info: <FaInfoCircle />,
+};
+function Toast({ t, onDismiss }) {
+  const [show, setShow] = useState(false);
+  const s = T_STYLE[t.type];
+  useEffect(() => {
+    const a = setTimeout(() => setShow(true), 10);
+    const b = setTimeout(() => { setShow(false); setTimeout(() => onDismiss(t.id), 300); }, t.dur || 3500);
+    return () => { clearTimeout(a); clearTimeout(b); };
+  }, []);
+  const close = () => { setShow(false); setTimeout(() => onDismiss(t.id), 300); };
+  return (
+    <div className={`relative flex items-start gap-3 bg-white rounded-xl shadow-lg ring-1 ${s.ring} px-4 pt-4 pb-3 min-w-[280px] max-w-[340px] overflow-hidden transition-all duration-300 ${show ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-8'}`} role="alert">
+      <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-xl ${s.bar}`} />
+      <span className={`mt-0.5 flex-shrink-0 ${s.icon}`}>{T_ICON[t.type]}</span>
+      <div className="flex-1 min-w-0">
+        {t.title && <p className="text-[10px] font-extrabold text-navy uppercase tracking-wide mb-0.5">{t.title}</p>}
+        <p className="text-xs text-slate-600 leading-snug">{t.msg}</p>
+      </div>
+      <button onClick={close} className="text-slate-300 hover:text-slate-500 transition-colors flex-shrink-0"><FaTimes className="text-xs" /></button>
+      <div className={`absolute bottom-0 left-1 right-0 h-0.5 ${s.bar} origin-left`} style={{ animation: `sd-shrink ${t.dur || 3500}ms linear forwards` }} />
+    </div>
+  );
+}
+function Toasts({ list, dismiss }) {
+  return (
+    <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 pointer-events-none">
+      {list.map(t => <div key={t.id} className="pointer-events-auto"><Toast t={t} onDismiss={dismiss} /></div>)}
+    </div>
+  );
+}
+let _tid = 0;
+function useToast() {
+  const [list, setList] = useState([]);
+  const dismiss = useCallback(id => setList(p => p.filter(t => t.id !== id)), []);
+  const push = useCallback((type, msg, title, dur) => {
+    const id = ++_tid;
+    setList(p => [...p, { id, type, msg, title, dur }]);
+  }, []);
+  return {
+    list, dismiss,
+    toast: {
+      success: (m, t, d) => push('success', m, t || 'Success', d),
+      warning: (m, t, d) => push('warning', m, t || 'Warning', d),
+      error:   (m, t, d) => push('error',   m, t || 'Error',   d),
+      info:    (m, t, d) => push('info',    m, t || 'Info',    d),
+    },
+  };
+}
+
+/* ══ CONSTANTS ══ */
+const DEPT_OPTIONS = [
+  'Information Technology',
+  'Computer Science',
+  'Computer System Engineering',
+  'Computer System Networks',
 ];
 
 const DEPT_BAR_COLORS = {
-  'Computer Science': 'bg-blue-500',
-  'Mathematics': 'bg-violet-500',
-  'Physics': 'bg-amber-500',
-  'Electronics': 'bg-emerald-500',
+  'Information Technology':      'bg-violet-500',
+  'Computer Science':            'bg-blue-500',
+  'Computer System Engineering': 'bg-emerald-500',
+  'Computer System Networks':    'bg-amber-500',
 };
 
-const TEACHERS = ['Dr. Anita Sharma', 'Prof. Ravi Kumar', 'Dr. Preethi Nair', 'Mr. Suresh Babu', 'Dr. Meera Krishnan', 'Prof. Karthik Rajan'];
-const DEPTS    = ['Computer Science', 'Mathematics', 'Physics', 'Electronics'];
+const TEACHERS = [
+  'Dr. Nimal Perera',
+  'Prof. Kasun Silva',
+  'Mr. Chamara Fernando',
+  'Ms. Dilani Jayawardena',
+  'Mr. Tharindu Wijesinghe',
+  'Ms. Sanduni Peris',
+  'Dr. Ruwan Gunasekara',
+  'Mr. Supun Herath',
+];
 
+const SUBJECT_OPTIONS = ['ITPM', 'NDM', 'PAF', 'ESD', 'HCI', 'IAS', 'DS', 'DSA'];
+
+const INITIAL_SUBJECTS = [
+  { id: 1,  name: 'Algorithms',       dept: 'Computer Science',            teacher: 'Dr. Nimal Perera',        hoursPerWeek: 4, maxHours: 5, classes: ['CS-A', 'CS-B'] },
+  { id: 2,  name: 'Data Structures',  dept: 'Computer Science',            teacher: 'Dr. Nimal Perera',        hoursPerWeek: 3, maxHours: 4, classes: ['CS-A']         },
+  { id: 3,  name: 'Networks',         dept: 'Computer System Networks',    teacher: 'Ms. Dilani Jayawardena',  hoursPerWeek: 3, maxHours: 4, classes: ['CS-B']         },
+  { id: 4,  name: 'OS Concepts',      dept: 'Computer Science',            teacher: 'Mr. Chamara Fernando',    hoursPerWeek: 3, maxHours: 3, classes: ['CS-A']         },
+  { id: 5,  name: 'Databases',        dept: 'Information Technology',      teacher: 'Dr. Ruwan Gunasekara',    hoursPerWeek: 6, maxHours: 4, classes: ['CS-A', 'CS-B'] },
+  { id: 6,  name: 'AI & ML',          dept: 'Computer Science',            teacher: 'Prof. Kasun Silva',       hoursPerWeek: 4, maxHours: 4, classes: ['CS-A']         },
+  { id: 7,  name: 'Physics I',        dept: 'Computer System Engineering', teacher: 'Mr. Tharindu Wijesinghe', hoursPerWeek: 0, maxHours: 3, classes: []               },
+  { id: 8,  name: 'Web Dev',          dept: 'Information Technology',      teacher: 'Ms. Sanduni Peris',       hoursPerWeek: 3, maxHours: 3, classes: ['CS-B']         },
+  { id: 9,  name: 'Cloud Computing',  dept: 'Computer System Engineering', teacher: 'Mr. Supun Herath',        hoursPerWeek: 2, maxHours: 3, classes: ['CS-A']         },
+  { id: 10, name: 'Digital Circuits', dept: 'Computer System Networks',    teacher: 'Ms. Dilani Jayawardena',  hoursPerWeek: 2, maxHours: 3, classes: ['EC-A']         },
+];
+
+/* ══ STATUS ══ */
 function getStatus(s) {
   if (s.hoursPerWeek === 0)              return 'unscheduled';
   if (s.hoursPerWeek > s.maxHours)       return 'over';
@@ -50,112 +130,318 @@ function getStatus(s) {
   if (!s.teacher)                         return 'no-teacher';
   return 'ok';
 }
-
 const STATUS_META = {
-  over:        { label: 'Over-allocated',  cls: 'bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800' },
-  under:       { label: 'Under-allocated', cls: 'bg-amber-100 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800' },
-  unscheduled: { label: 'Not Scheduled',   cls: 'bg-slate-100 dark:bg-slate-700 text-muted dark:text-slate-400 border border-slate-200 dark:border-slate-600' },
-  'no-teacher':{ label: 'No Teacher',      cls: 'bg-orange-100 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-800' },
-  ok:          { label: 'OK',              cls: 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800' },
+  over:         { label: 'Over-allocated',  cls: 'bg-rose-100 text-rose-600 border border-rose-200' },
+  under:        { label: 'Under-allocated', cls: 'bg-amber-100 text-amber-600 border border-amber-200' },
+  unscheduled:  { label: 'Not Scheduled',   cls: 'bg-slate-100 text-muted border border-slate-200' },
+  'no-teacher': { label: 'No Teacher',      cls: 'bg-orange-100 text-orange-600 border border-orange-200' },
+  ok:           { label: 'OK',              cls: 'bg-emerald-100 text-emerald-600 border border-emerald-200' },
 };
 
+/* ══ VALIDATION ══ */
 function validateSubject(s, all) {
-  const errs = [];
-  if (!s.name.trim())                                                                         errs.push('Subject name is required.');
-  if (s.hoursPerWeek <= 0)                                                                    errs.push('Weekly hours must be > 0.');
-  if (s.hoursPerWeek > s.maxHours)                                                            errs.push(`Hours (${s.hoursPerWeek}) exceed max (${s.maxHours}).`);
-  if (!s.teacher)                                                                             errs.push('A teacher must be assigned.');
-  if (all.some(x => x.id !== s.id && x.name.trim().toLowerCase() === s.name.trim().toLowerCase())) errs.push('Duplicate subject name.');
+  const errs = {};
+  if (!s.dept)                                                                                         errs.dept         = 'Department selection is required';
+  if (!s.name.trim())                                                                                  errs.name         = 'Subject selection is required';
+  if (!s.teacher)                                                                                      errs.teacher      = 'Teacher selection is required';
+  if (s.hoursPerWeek === '' || Number(s.hoursPerWeek) <= 0)                                           errs.hoursPerWeek = 'Weekly hours must be greater than zero';
+  if (s.maxHours === '' || Number(s.maxHours) <= 0)                                                   errs.maxHours     = 'Max hours must be greater than zero';
+  if (!errs.hoursPerWeek && !errs.maxHours && Number(s.hoursPerWeek) > Number(s.maxHours))            errs.hoursPerWeek = 'Weekly hours cannot exceed max hours';
+  if (!errs.name && all.some(x => x.id !== s.id && x.name.trim().toLowerCase() === s.name.trim().toLowerCase())) errs.name = 'Duplicate subject not allowed';
   return errs;
 }
 
-function AddSubjectModal({ onClose, onAdd, existing }) {
-  const [form, setForm] = useState({ name: '', dept: 'Computer Science', teacher: '', hoursPerWeek: '', maxHours: '' });
-  const [errors, setErrors] = useState([]);
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const submit = () => {
-    const candidate = { ...form, id: Date.now(), hoursPerWeek: Number(form.hoursPerWeek), maxHours: Number(form.maxHours), classes: [] };
-    const errs = validateSubject(candidate, existing);
-    if (errs.length) { setErrors(errs); return; }
-    onAdd(candidate); onClose();
+/* ══ EMPTY FORM ══ */
+const EMPTY_FORM = { name: '', dept: '', teacher: '', hoursPerWeek: '', maxHours: '' };
+
+/* ══ INPUT FIELD COMPONENT ══ */
+function Field({ label, id, type = 'text', placeholder, value, onChange, error }) {
+  return (
+    <div>
+      <label htmlFor={id} className="text-xs font-bold text-muted mb-1 block">{label}</label>
+      <input
+        id={id} type={type} placeholder={placeholder} value={value}
+        onChange={e => onChange(e.target.value)}
+        onKeyDown={type === 'number' ? e => { if (['-', 'e', '+', '.'].includes(e.key)) e.preventDefault(); } : undefined}
+        className={`w-full text-sm px-3 py-2.5 rounded-xl border bg-white text-navy focus:outline-none transition-all duration-200
+          ${error ? 'border-rose-400 bg-rose-50 focus:border-rose-500' : 'border-slate-200 focus:border-secondary'}`}
+      />
+      {error && (
+        <p className="text-[10px] text-rose-500 mt-1 flex items-center gap-1 animate-fade-in">
+          <FaExclamationTriangle className="flex-shrink-0" />{error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/* ══ SUBJECT MODAL (Add / Edit) ══ */
+function SubjectModal({ mode, initial, existing, onClose, onSubmit }) {
+  const [form, setForm] = useState(initial);
+  const [errors, setErrors] = useState({});
+  const firstErrRef = useRef(null);
+  const subjectDropRef = useRef(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => subjectDropRef.current?.focus(), 100);
+    return () => clearTimeout(t);
+  }, []);
+
+  const set = (k, v) => {
+    setForm(f => ({ ...f, [k]: v }));
+    setErrors(e => ({ ...e, [k]: undefined }));
   };
 
+  const submit = () => {
+    const candidate = {
+      ...form,
+      id: initial.id || Date.now(),
+      hoursPerWeek: Number(form.hoursPerWeek),
+      maxHours: Number(form.maxHours),
+      classes: initial.classes || [],
+    };
+    const errs = validateSubject(candidate, existing);
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      setTimeout(() => firstErrRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+      return;
+    }
+    onSubmit(candidate);
+    onClose();
+  };
+
+  const isAdd = mode === 'add';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-md p-6">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+        {/* header */}
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-extrabold text-navy dark:text-white text-lg">Add Subject</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-muted"><FaTimes /></button>
+          <h3 className="font-extrabold text-navy text-lg">
+            {isAdd ? '+ Add Subject' : '✎ Edit Subject'}
+          </h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-muted transition-colors"><FaTimes /></button>
         </div>
-        {errors.length > 0 && (
-          <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl p-3 mb-4 space-y-1">
-            {errors.map(e => <div key={e} className="text-xs text-rose-600 dark:text-rose-400 flex items-center gap-1.5"><FaExclamationTriangle className="flex-shrink-0" />{e}</div>)}
-          </div>
-        )}
-        <div className="space-y-3">
-          {[
-            { label: 'Subject Name *', k: 'name', type: 'text', ph: 'e.g. Software Engineering' },
-            { label: 'Weekly Hours *', k: 'hoursPerWeek', type: 'number', ph: 'e.g. 3' },
-            { label: 'Max Hours *',    k: 'maxHours',     type: 'number', ph: 'e.g. 4' },
-          ].map(f => (
-            <div key={f.k}>
-              <label className="text-xs font-bold text-muted dark:text-slate-400 mb-1 block">{f.label}</label>
-              <input type={f.type} placeholder={f.ph} value={form[f.k]} onChange={e => set(f.k, e.target.value)}
-                className="w-full text-sm px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-navy dark:text-slate-100 focus:outline-none focus:border-primary transition-colors" />
-            </div>
-          ))}
+
+        <div className="space-y-3" ref={firstErrRef}>
+          {/* Subject Name Dropdown */}
           <div>
-            <label className="text-xs font-bold text-muted dark:text-slate-400 mb-1 block">Department *</label>
-            <select value={form.dept} onChange={e => set('dept', e.target.value)} className="w-full text-sm px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-navy dark:text-slate-100 focus:outline-none focus:border-primary transition-colors">
-              {DEPTS.map(d => <option key={d}>{d}</option>)}
+            <label htmlFor="field-name" className="text-xs font-bold text-muted mb-1 block">Subject Name *</label>
+            <select
+              id="field-name"
+              ref={subjectDropRef}
+              value={form.name}
+              onChange={e => set('name', e.target.value)}
+              className={`w-full text-sm px-3 py-2.5 rounded-xl border bg-white text-navy focus:outline-none transition-all duration-200
+                ${errors.name ? 'border-rose-400 bg-rose-50 focus:border-rose-500' : 'border-slate-200 focus:border-secondary'}`}
+            >
+              <option value="" disabled>Select Subject</option>
+              {SUBJECT_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
+            {errors.name
+              ? <p className="text-[10px] text-rose-500 mt-1 flex items-center gap-1 animate-fade-in"><FaExclamationTriangle className="flex-shrink-0" />{errors.name}</p>
+              : <p className="text-[10px] text-slate-400 mt-1">Select subject for distribution analytics</p>
+            }
           </div>
+
+          {/* Department dropdown */}
           <div>
-            <label className="text-xs font-bold text-muted dark:text-slate-400 mb-1 block">Assign Teacher *</label>
-            <select value={form.teacher} onChange={e => set('teacher', e.target.value)} className="w-full text-sm px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-navy dark:text-slate-100 focus:outline-none focus:border-primary transition-colors">
-              <option value="">-- Select teacher --</option>
+            <label htmlFor="field-dept" className="text-xs font-bold text-muted mb-1 block">Department *</label>
+            <select
+              id="field-dept"
+              value={form.dept}
+              onChange={e => set('dept', e.target.value)}
+              className={`w-full text-sm px-3 py-2.5 rounded-xl border bg-white text-navy focus:outline-none transition-all duration-200
+                ${errors.dept ? 'border-rose-400 bg-rose-50 focus:border-rose-500' : 'border-slate-200 focus:border-secondary'}`}
+            >
+              <option value="" disabled>Select Department</option>
+              {DEPT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+            {errors.dept
+              ? <p className="text-[10px] text-rose-500 mt-1 flex items-center gap-1 animate-fade-in"><FaExclamationTriangle className="flex-shrink-0" />{errors.dept}</p>
+              : <p className="text-[10px] text-slate-400 mt-1">Changing department updates allocation charts</p>
+            }
+          </div>
+
+          {/* Teacher dropdown */}
+          <div>
+            <label htmlFor="field-teacher" className="text-xs font-bold text-muted mb-1 block">Assign Teacher *</label>
+            <select
+              id="field-teacher"
+              value={form.teacher}
+              onChange={e => set('teacher', e.target.value)}
+              className={`w-full text-sm px-3 py-2.5 rounded-xl border bg-white text-navy focus:outline-none transition-all duration-200
+                ${errors.teacher ? 'border-rose-400 bg-rose-50 focus:border-rose-500' : 'border-slate-200 focus:border-secondary'}`}
+            >
+              <option value="" disabled>Select Teacher</option>
               {TEACHERS.map(t => <option key={t}>{t}</option>)}
             </select>
+            {errors.teacher && (
+              <p className="text-[10px] text-rose-500 mt-1 flex items-center gap-1 animate-fade-in">
+                <FaExclamationTriangle className="flex-shrink-0" />{errors.teacher}
+              </p>
+            )}
+          </div>
+
+          {/* Hours row */}
+          <div className="grid grid-cols-2 gap-3">
+            <Field
+              label="Weekly Hours *" id="field-hours" type="number" placeholder="e.g. 3"
+              value={form.hoursPerWeek} onChange={v => set('hoursPerWeek', v)} error={errors.hoursPerWeek}
+            />
+            <Field
+              label="Max Hours *" id="field-maxhours" type="number" placeholder="e.g. 4"
+              value={form.maxHours} onChange={v => set('maxHours', v)} error={errors.maxHours}
+            />
           </div>
         </div>
+
+        {/* actions */}
         <div className="flex gap-3 mt-5">
-          <button onClick={onClose} className="flex-1 py-2.5 text-sm font-semibold border border-slate-200 dark:border-slate-600 rounded-xl text-muted dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Cancel</button>
-          <button onClick={submit} className="flex-1 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-secondary to-violet-700 rounded-xl shadow-md hover:from-indigo-700 hover:to-violet-600 transition-all">Add Subject</button>
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 text-sm font-semibold border border-slate-200 rounded-xl text-muted hover:bg-slate-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            id="btn-modal-submit"
+            onClick={submit}
+            disabled={!form.name || !form.dept || !form.teacher}
+            className="flex-1 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-secondary to-violet-700 rounded-xl shadow-md hover:from-indigo-700 hover:to-violet-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+          >
+            <FaSave className="text-[11px]" />
+            {isAdd ? 'Add Subject' : 'Save Changes'}
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
+/* ══ MAIN ══ */
 export default function SubjectDistribution() {
-  const [subjects, setSubjects] = useState(INITIAL_SUBJECTS);
-  const [showModal, setShowModal] = useState(false);
-  const [filter, setFilter] = useState('all');
+  const [subjects, setSubjects]   = useState(INITIAL_SUBJECTS);
+  const [modal, setModal]         = useState(null);   // null | 'add' | 'edit'
+  const [editTarget, setEditTarget] = useState(null);
+  const [filter, setFilter]       = useState('all');
+  const [delId, setDelId]         = useState(null);
+  const { list, dismiss, toast }  = useToast();
 
+  /* ── derived ── */
   const issues   = subjects.filter(s => getStatus(s) !== 'ok');
   const filtered = filter === 'all' ? subjects : subjects.filter(s => getStatus(s) === filter);
   const noData   = subjects.length === 0;
 
-  const deptTotals = Object.entries(subjects.reduce((acc, s) => { acc[s.dept] = (acc[s.dept] || 0) + s.hoursPerWeek; return acc; }, {})).sort((a, b) => b[1] - a[1]);
+  const deptTotals = Object.entries(
+    subjects.reduce((acc, s) => { acc[s.dept] = (acc[s.dept] || 0) + s.hoursPerWeek; return acc; }, {})
+  ).sort((a, b) => b[1] - a[1]);
   const maxDept = Math.max(...deptTotals.map(d => d[1]), 1);
 
-  const classTotals = Object.entries(subjects.reduce((acc, s) => { s.classes.forEach(c => { acc[c] = (acc[c] || 0) + s.hoursPerWeek; }); return acc; }, {})).sort((a, b) => b[1] - a[1]);
+  const classTotals = Object.entries(
+    subjects.reduce((acc, s) => { s.classes.forEach(c => { acc[c] = (acc[c] || 0) + s.hoursPerWeek; }); return acc; }, {})
+  ).sort((a, b) => b[1] - a[1]);
   const maxClass = Math.max(...classTotals.map(c => c[1]), 1);
+
+  /* ── CRUD ── */
+  function openAdd() {
+    setEditTarget(null);
+    setModal('add');
+    toast.info('Fill in subject details to add a new entry', 'Info', 3000);
+  }
+  function openEdit(s) {
+    setEditTarget(s);
+    setModal('edit');
+    toast.info(`Editing "${s.name}"`, 'Info', 3000);
+  }
+  function handleAdd(candidate) {
+    setSubjects(p => [...p, candidate]);
+    toast.success('Subject added successfully', 'Success');
+  }
+  function handleUpdate(candidate) {
+    setSubjects(p => p.map(s => s.id === candidate.id ? { ...s, ...candidate } : s));
+    toast.success('Subject updated successfully', 'Success');
+  }
+  function confirmDelete(id) { setDelId(id); }
+  function handleDelete() {
+    const s = subjects.find(x => x.id === delId);
+    setSubjects(p => p.filter(x => x.id !== delId));
+    setDelId(null);
+    toast.success(`"${s?.name}" deleted successfully`, 'Success');
+  }
 
   return (
     <div className="min-h-screen bg-surface dark:bg-navy font-sans text-navy dark:text-slate-100 antialiased">
-      {showModal && <AddSubjectModal onClose={() => setShowModal(false)} onAdd={s => setSubjects(p => [...p, s])} existing={subjects} />}
+      <Toasts list={list} dismiss={dismiss} />
 
+      {/* ── modals ── */}
+      {modal === 'add' && (
+        <SubjectModal
+          mode="add"
+          initial={EMPTY_FORM}
+          existing={subjects}
+          onClose={() => setModal(null)}
+          onSubmit={handleAdd}
+        />
+      )}
+      {modal === 'edit' && editTarget && (
+        <SubjectModal
+          mode="edit"
+          initial={{
+            id: editTarget.id, name: editTarget.name, dept: editTarget.dept,
+            teacher: editTarget.teacher, hoursPerWeek: String(editTarget.hoursPerWeek),
+            maxHours: String(editTarget.maxHours), classes: editTarget.classes,
+          }}
+          existing={subjects}
+          onClose={() => setModal(null)}
+          onSubmit={handleUpdate}
+        />
+      )}
+
+      {/* ── delete confirm ── */}
+      {delId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-xl bg-rose-100 flex items-center justify-center text-rose-500 text-xl"><FaTrash /></div>
+              <div>
+                <h3 className="font-extrabold text-navy">Confirm Delete</h3>
+                <p className="text-xs text-muted mt-0.5">This action cannot be undone.</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-600 mb-5">
+              Delete subject <strong>"{subjects.find(s => s.id === delId)?.name}"</strong>?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setDelId(null)} className="px-4 py-2 text-xs font-bold rounded-lg border border-slate-200 text-muted hover:bg-slate-50 transition-colors">Cancel</button>
+              <button id="btn-confirm-delete" onClick={handleDelete} className="px-5 py-2 text-xs font-extrabold rounded-lg bg-rose-500 text-white hover:bg-rose-600 transition-all shadow-sm">
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── header ── */}
       <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 px-5 sm:px-8 py-4 flex items-center gap-3 sticky top-0 z-40 shadow-sm">
-        <Link to="/analytics" id="subj-back" className="inline-flex items-center gap-2 text-sm font-semibold text-muted dark:text-slate-400 hover:text-primary dark:hover:text-blue-400 transition-colors"><FaArrowLeft className="text-xs" /> Analytics</Link>
+        <Link to="/analytics" id="subj-back" className="inline-flex items-center gap-2 text-sm font-semibold text-muted dark:text-slate-400 hover:text-primary dark:hover:text-blue-400 transition-colors">
+          <FaArrowLeft className="text-xs" /> Analytics
+        </Link>
         <span className="text-slate-300 dark:text-slate-700">/</span>
         <span className="text-sm font-semibold">Subject Distribution</span>
-        <button id="add-subject-btn" onClick={() => setShowModal(true)} className="ml-auto text-xs font-bold text-white bg-gradient-to-r from-secondary to-violet-700 px-4 py-2 rounded-xl shadow-md hover:from-indigo-700 transition-all">+ Add Subject</button>
+        <button id="add-subject-btn" onClick={openAdd} className="ml-auto inline-flex items-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-secondary to-violet-700 px-4 py-2 rounded-xl shadow-md hover:from-indigo-700 transition-all">
+          <FaPlus className="text-[10px]" /> Add Subject
+        </button>
       </header>
 
       <main className="max-w-7xl mx-auto px-5 sm:px-8 py-10 space-y-10">
         <Reveal>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-navy dark:text-white mb-2">Subject <span className="bg-gradient-to-r from-secondary to-accent bg-clip-text text-transparent">Distribution</span></h1>
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-navy dark:text-white mb-2">
+            Subject <span className="bg-gradient-to-r from-secondary to-accent bg-clip-text text-transparent">Distribution</span>
+          </h1>
           <p className="text-muted dark:text-slate-400 text-lg">Analyse subject-hour allocations, class distributions, and departmental load.</p>
         </Reveal>
 
@@ -169,7 +455,9 @@ export default function SubjectDistribution() {
         {issues.length > 0 && (
           <Reveal>
             <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 rounded-2xl p-5">
-              <div className="flex items-center gap-2 font-bold text-rose-700 dark:text-rose-300 mb-3"><FaExclamationTriangle /> {issues.length} Subject{issues.length > 1 ? 's' : ''} Need Attention</div>
+              <div className="flex items-center gap-2 font-bold text-rose-700 dark:text-rose-300 mb-3">
+                <FaExclamationTriangle /> {issues.length} Subject{issues.length > 1 ? 's' : ''} Need Attention
+              </div>
               <div className="space-y-1">
                 {issues.map(s => (
                   <div key={s.id} className="text-sm text-rose-600 dark:text-rose-400 flex items-center gap-2">
@@ -185,7 +473,7 @@ export default function SubjectDistribution() {
           </Reveal>
         )}
 
-        {/* Department chart */}
+        {/* Department chart — auto-updates when subjects change */}
         <Reveal>
           <section className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-xl p-6 sm:p-8">
             <h2 className="text-xl font-extrabold text-navy dark:text-white mb-1">Department-wise Allocation</h2>
@@ -195,7 +483,7 @@ export default function SubjectDistribution() {
               : <div className="space-y-3">
                   {deptTotals.map(([dept, hrs]) => (
                     <div key={dept} className="flex items-center gap-3">
-                      <div className="w-36 text-xs font-semibold text-muted dark:text-slate-400 truncate flex-shrink-0">{dept}</div>
+                      <div className="w-48 text-xs font-semibold text-muted dark:text-slate-400 truncate flex-shrink-0">{dept}</div>
                       <div className="flex-1 h-6 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                         <div className={`h-full rounded-full ${DEPT_BAR_COLORS[dept] || 'bg-primary'} transition-all duration-700`} style={{ width: `${(hrs / maxDept) * 100}%` }} />
                       </div>
@@ -241,6 +529,7 @@ export default function SubjectDistribution() {
                 ))}
               </div>
             </div>
+
             {filtered.length === 0
               ? <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-10 text-center text-muted dark:text-slate-400 text-sm">No subjects match this filter.</div>
               : <div className="grid gap-3">
@@ -257,9 +546,16 @@ export default function SubjectDistribution() {
                               <span className="font-bold text-navy dark:text-slate-100 text-sm">{s.name}</span>
                               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${meta.cls}`}>{meta.label}</span>
                             </div>
-                            <div className="text-xs text-muted dark:text-slate-400 mt-0.5">{s.dept} {s.teacher ? `· ${s.teacher}` : <span className="text-orange-500">· No teacher</span>}</div>
+                            <div className="text-xs text-muted dark:text-slate-400 mt-0.5">
+                              {s.dept} {s.teacher ? `· ${s.teacher}` : <span className="text-orange-500">· No teacher</span>}
+                            </div>
                           </div>
                           <span className={`text-xs font-bold ${over ? 'text-rose-500' : 'text-muted dark:text-slate-400'}`}>{s.hoursPerWeek}h / {s.maxHours}h</span>
+                          {/* edit / delete */}
+                          <div className="flex gap-1.5">
+                            <button id={`edit-${s.id}`} onClick={() => openEdit(s)} className="w-8 h-8 rounded-lg bg-blue-50 text-primary hover:bg-blue-100 flex items-center justify-center transition-colors" title="Edit"><FaEdit className="text-xs" /></button>
+                            <button id={`del-${s.id}`} onClick={() => confirmDelete(s.id)} className="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 flex items-center justify-center transition-colors" title="Delete"><FaTrash className="text-xs" /></button>
+                          </div>
                         </div>
                         <div className="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                           <div className={`h-full rounded-full transition-all duration-700 ${over ? 'bg-gradient-to-r from-rose-500 to-rose-400' : 'bg-gradient-to-r from-secondary to-accent'}`} style={{ width: `${pct}%` }} />
@@ -275,7 +571,14 @@ export default function SubjectDistribution() {
           </section>
         </Reveal>
       </main>
-      <style>{`.reveal-on-scroll{opacity:0;transform:translateY(24px);transition:opacity .55s ease,transform .55s ease}.reveal-on-scroll.is-visible{opacity:1;transform:translateY(0)}`}</style>
+
+      <style>{`
+        .reveal-on-scroll { opacity:0; transform:translateY(24px); transition:opacity .55s ease,transform .55s ease; }
+        .reveal-on-scroll.is-visible { opacity:1; transform:translateY(0); }
+        @keyframes sd-shrink { from{transform:scaleX(1)} to{transform:scaleX(0)} }
+        @keyframes fade-in { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+        .animate-fade-in { animation: fade-in 0.2s ease forwards; }
+      `}</style>
     </div>
   );
 }
