@@ -110,6 +110,30 @@ const STATUS_TIPS = {
   OK:              'Allocation is within normal limits',
 };
 
+/* ══ CONFIRM RESET DIALOG ══ */
+function ConfirmReset({ onConfirm, onCancel }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/50 backdrop-blur-sm">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 rp-fade-in">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-950/40 flex items-center justify-center text-amber-500 text-xl">
+            <FaRedo />
+          </div>
+          <div>
+            <h3 className="font-extrabold text-navy dark:text-white">Reset Form</h3>
+            <p className="text-xs text-muted mt-0.5">This will clear all your selections.</p>
+          </div>
+        </div>
+        <p className="text-sm text-slate-600 dark:text-slate-300 mb-5">Reset all form fields? Your current selections will be lost.</p>
+        <div className="flex gap-3 justify-end">
+          <button onClick={onCancel} className="px-4 py-2 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-600 text-muted hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Cancel</button>
+          <button id="confirm-reset-btn" onClick={onConfirm} className="px-5 py-2 text-xs font-extrabold rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-all shadow-sm">Yes, Reset</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ══ CONFIRM EXPORT DIALOG ══ */
 function ConfirmExport({ fmt, onConfirm, onCancel }) {
   return (
@@ -148,9 +172,11 @@ export default function Reports() {
   const [fieldErrs, setFieldErrs] = useState({});
   const [loading, setLoading]     = useState(false);
   const [generated, setGenerated] = useState(null);
-  const [exporting, setExporting] = useState(null);   // fmt being exported
-  const [exported, setExported]   = useState(null);   // last exported fmt
-  const [confirmFmt, setConfirmFmt] = useState(null); // export confirm dialog
+  const [exporting, setExporting] = useState(null);
+  const [exported, setExported]   = useState(null);
+  const [confirmFmt, setConfirmFmt] = useState(null);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [activePreset, setActivePreset] = useState('Last 7 days');
   const { list, dismiss, toast }  = useToast();
 
   const firstErrRef  = useRef(null);
@@ -166,18 +192,58 @@ export default function Reports() {
 
   /* ── quick date range presets ── */
   const applyPreset = (label) => {
-    if (label === 'Today')      { set('from', todayStr);    setForm(f => ({ ...f, from: todayStr,    to: todayStr    })); }
-    if (label === 'Last 7 days'){ setForm(f => ({ ...f, from: weekAgoStr,  to: todayStr })); setFieldErrs({}); setGenerated(null); }
-    if (label === 'Last 30 days'){ setForm(f => ({ ...f, from: monthAgoStr, to: todayStr })); setFieldErrs({}); setGenerated(null); }
+    setActivePreset(label);
+    setFieldErrs({});
+    setGenerated(null);
+    if (label === 'Today')       { setForm(f => ({ ...f, from: todayStr,    to: todayStr    })); }
+    if (label === 'Last 7 days') { setForm(f => ({ ...f, from: weekAgoStr,  to: todayStr    })); }
+    if (label === 'Last 30 days'){ setForm(f => ({ ...f, from: monthAgoStr, to: todayStr    })); }
   };
 
-  /* ── reset ── */
+  /* ── reset (with confirmation) ── */
   const resetForm = () => {
     setForm({ type: '', from: weekAgoStr, to: todayStr });
     setFieldErrs({});
     setGenerated(null);
     setExported(null);
+    setActivePreset('Last 7 days');
+    setConfirmReset(false);
     toast.info('Form reset successfully', 'Reset');
+  };
+
+  /* ── auto-correct date range if From > To ── */
+  const handleFromChange = (val) => {
+    setActivePreset(null);
+    if (form.to && val > form.to) {
+      setForm(f => ({ ...f, from: form.to, to: val }));
+      setFieldErrs(prev => { const n = { ...prev }; delete n.from; delete n.to; delete n.range; return n; });
+      setGenerated(null);
+      toast.info('Date range auto-corrected', 'Info', 2500);
+    } else {
+      set('from', val);
+    }
+  };
+  const handleToChange = (val) => {
+    setActivePreset(null);
+    set('to', val);
+  };
+
+  /* ── keyboard navigation for report type grid ── */
+  const handleTypeKeyDown = (e) => {
+    const ids = REPORT_TYPES.map(r => r.id);
+    const cur = ids.indexOf(form.type);
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = ids[(cur + 1) % ids.length];
+      set('type', next);
+      document.getElementById(`report-type-${next}`)?.focus();
+    }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prev = ids[(cur - 1 + ids.length) % ids.length];
+      set('type', prev);
+      document.getElementById(`report-type-${prev}`)?.focus();
+    }
   };
 
   /* ── generate ── */
@@ -241,6 +307,7 @@ export default function Reports() {
     <div className="min-h-screen bg-surface dark:bg-navy font-sans text-navy dark:text-slate-100 antialiased">
       <Toasts list={list} dismiss={dismiss} />
       {confirmFmt && <ConfirmExport fmt={confirmFmt} onConfirm={doExport} onCancel={() => setConfirmFmt(null)} />}
+      {confirmReset && <ConfirmReset onConfirm={resetForm} onCancel={() => setConfirmReset(false)} />}
 
       {/* ── header ── */}
       <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 px-5 sm:px-8 py-4 flex items-center gap-3 sticky top-0 z-40 shadow-sm">
@@ -252,10 +319,10 @@ export default function Reports() {
         {/* Reset button in header */}
         <button
           id="reset-form-btn"
-          onClick={resetForm}
+          onClick={() => setConfirmReset(true)}
           aria-label="Reset form"
-          title="Reset all form fields"
-          className="ml-auto inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full border border-slate-200 text-muted hover:border-amber-400 hover:text-amber-600 transition-all"
+          title="Clear all selections"
+          className="ml-auto inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-600 text-muted hover:border-amber-400 hover:text-amber-600 transition-all"
         >
           <FaRedo className="text-[10px]" /> Reset Form
         </button>
@@ -288,14 +355,17 @@ export default function Reports() {
 
           {/* ── Report type ── */}
           <p className="text-sm font-bold text-navy dark:text-slate-200 mb-1">1. Select Report Type *</p>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">Choose the type of analytics report to generate</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">Select one report type to continue</p>
           {errs.type && (
             <p className="text-[10px] text-rose-500 mb-2 flex items-center gap-1 rp-fade-in"><FaExclamationTriangle className="flex-shrink-0" />Please select a report type</p>
           )}
           <div
             ref={typeRef}
             tabIndex={-1}
-            className={`grid sm:grid-cols-2 gap-3 mb-6 rounded-xl outline-none ${errs.type ? 'ring-2 ring-rose-300 ring-offset-2' : ''}`}
+            onKeyDown={handleTypeKeyDown}
+            role="group"
+            aria-label="Report type selection"
+            className={`grid sm:grid-cols-2 gap-3 mb-6 rounded-xl outline-none ${errs.type ? 'ring-2 ring-rose-300 dark:ring-rose-700 ring-offset-2' : ''}`}
           >
             {REPORT_TYPES.map(r => (
               <button
@@ -327,7 +397,7 @@ export default function Reports() {
 
           {/* ── Date range ── */}
           <p className="text-sm font-bold text-navy dark:text-slate-200 mb-1">2. Select Date Range *</p>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mb-2">Select a valid date range for report generation</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mb-2">Choose a valid reporting period</p>
 
           {/* Quick presets */}
           <div className="flex flex-wrap gap-2 mb-3">
@@ -336,7 +406,12 @@ export default function Reports() {
                 key={label}
                 onClick={() => applyPreset(label)}
                 aria-label={`Apply ${label} preset`}
-                className="text-[11px] font-bold px-3 py-1 rounded-full border border-slate-200 dark:border-slate-600 text-muted dark:text-slate-400 hover:border-amber-400 hover:text-amber-600 transition-all"
+                aria-pressed={activePreset === label}
+                className={`text-[11px] font-bold px-3 py-1 rounded-full border transition-all ${
+                  activePreset === label
+                    ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
+                    : 'border-slate-200 dark:border-slate-600 text-muted dark:text-slate-400 hover:border-amber-400 hover:text-amber-600'
+                }`}
               >
                 {label}
               </button>
@@ -351,7 +426,7 @@ export default function Reports() {
                 id="date-from"
                 ref={fromRef}
                 type="date" value={form.from} max={todayStr}
-                onChange={e => set('from', e.target.value)}
+                onChange={e => handleFromChange(e.target.value)}
                 aria-label="Start date"
                 className={`w-full text-sm px-3 py-2.5 rounded-xl border bg-white dark:bg-slate-700 text-navy dark:text-slate-100 focus:outline-none transition-colors ${
                   errs.from || errs.range ? 'border-rose-400 bg-rose-50 dark:bg-rose-950/30 focus:border-rose-500' : 'border-slate-200 dark:border-slate-600 focus:border-amber-500'
@@ -365,7 +440,7 @@ export default function Reports() {
               <input
                 id="date-to"
                 type="date" value={form.to} max={todayStr}
-                onChange={e => set('to', e.target.value)}
+                onChange={e => handleToChange(e.target.value)}
                 aria-label="End date"
                 className={`w-full text-sm px-3 py-2.5 rounded-xl border bg-white dark:bg-slate-700 text-navy dark:text-slate-100 focus:outline-none transition-colors ${
                   errs.to || errs.range ? 'border-rose-400 bg-rose-50 dark:bg-rose-950/30 focus:border-rose-500' : 'border-slate-200 dark:border-slate-600 focus:border-amber-500'
@@ -388,7 +463,7 @@ export default function Reports() {
                 aria-label="Generate report"
                 className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 font-bold text-white px-8 py-3.5 rounded-xl shadow-lg transition-all duration-200 text-sm ${
                   canGenerate
-                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 hover:-translate-y-0.5 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 hover:-translate-y-0.5 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 rp-pulse'
                     : 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-60'
                 }`}
               >
@@ -420,7 +495,6 @@ export default function Reports() {
         {/* ── Generated report preview ── */}
         {generated && !loading && (
           <div className="bg-white dark:bg-slate-800 rounded-3xl border-2 border-emerald-300 dark:border-emerald-700 shadow-xl p-6 sm:p-8 rp-border-glow">
-            {/* Ready header */}
             <div className="flex items-start justify-between gap-4 flex-wrap mb-2">
               <div>
                 <div className="flex items-center gap-2 mb-1">
@@ -430,12 +504,13 @@ export default function Reports() {
                 <p className="text-sm text-muted dark:text-slate-400">Generated at {generated.generatedAt}</p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-full px-2.5 py-0.5">Generated just now</span>
                 <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-full px-3 py-1 rp-badge-pop">
                   ✓ Ready for Export
                 </span>
               </div>
             </div>
-            <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold mb-6">Your analytics report is ready for export</p>
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold mb-6">Your analytics report is ready</p>
 
             {/* Summary cards */}
             <div className="grid sm:grid-cols-3 gap-4 mb-6">
@@ -501,7 +576,7 @@ export default function Reports() {
                     onClick={() => requestExport(fmt)}
                     disabled={!canExport}
                     aria-label={`Export report as ${fmt}`}
-                    title={!canExport ? 'Generate a report first to enable export' : `Export as ${fmt}`}
+                    title={!canExport ? 'Generate a report first to enable export' : fmt === 'PDF' ? 'Export report as PDF' : 'Export report as Excel'}
                     className={`inline-flex items-center gap-2 font-bold text-white text-sm px-6 py-2.5 rounded-xl shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 ${
                       canExport
                         ? `bg-gradient-to-r ${color} hover:-translate-y-0.5 hover:shadow-lg focus:ring-amber-400`
@@ -531,21 +606,23 @@ export default function Reports() {
               <FaFileAlt className="text-3xl text-amber-300 dark:text-amber-600" />
             </div>
             <div className="font-bold text-navy dark:text-slate-200 mb-1 text-lg">No report generated yet</div>
-            <div className="text-sm text-muted dark:text-slate-400">Select options above and generate your report</div>
+            <div className="text-sm text-muted dark:text-slate-400">Select options above and click Generate Report</div>
           </div>
         )}
       </main>
 
       <style>{`
-        @keyframes rp-shrink  { from{transform:scaleX(1)} to{transform:scaleX(0)} }
-        @keyframes rp-fade-in { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes rp-pop     { 0%{transform:scale(0.8);opacity:0} 60%{transform:scale(1.1)} 100%{transform:scale(1);opacity:1} }
-        @keyframes rp-float   { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
-        @keyframes rp-glow    { 0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,0)} 50%{box-shadow:0 0 0 6px rgba(16,185,129,.15)} }
-        .rp-fade-in   { animation: rp-fade-in 0.22s ease forwards; }
-        .rp-badge-pop { animation: rp-pop     0.35s ease forwards; }
-        .rp-float     { animation: rp-float   3s ease-in-out infinite; }
-        .rp-border-glow { animation: rp-glow  2s ease-in-out 2; }
+        @keyframes rp-shrink    { from{transform:scaleX(1)} to{transform:scaleX(0)} }
+        @keyframes rp-fade-in   { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes rp-pop       { 0%{transform:scale(0.8);opacity:0} 60%{transform:scale(1.1)} 100%{transform:scale(1);opacity:1} }
+        @keyframes rp-float     { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+        @keyframes rp-glow      { 0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,0)} 50%{box-shadow:0 0 0 6px rgba(16,185,129,.15)} }
+        @keyframes rp-pulse-btn { 0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.5)} 70%{box-shadow:0 0 0 8px rgba(245,158,11,0)} }
+        .rp-fade-in   { animation: rp-fade-in   0.22s ease forwards; }
+        .rp-badge-pop { animation: rp-pop        0.35s ease forwards; }
+        .rp-float     { animation: rp-float      3s ease-in-out infinite; }
+        .rp-border-glow { animation: rp-glow     2s ease-in-out 2; }
+        .rp-pulse     { animation: rp-pulse-btn  2s ease-in-out infinite; }
       `}</style>
     </div>
   );
