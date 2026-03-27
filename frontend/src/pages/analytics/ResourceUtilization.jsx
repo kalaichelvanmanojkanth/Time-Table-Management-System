@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   FaArrowLeft, FaDoorOpen, FaExclamationTriangle, FaCheckCircle,
   FaTimes, FaTimesCircle, FaInfoCircle, FaPlus, FaEdit, FaTrash, FaSave,
+  FaSpinner,
 } from 'react-icons/fa';
 
 /* ── Reveal hook ── */
@@ -167,7 +168,13 @@ function validateRooms(rooms) {
 function RoomModal({ mode, initial, rooms, onClose, onSubmit }) {
   const [form, setForm] = useState(initial);
   const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
   const firstErrRef = useRef(null);
+  const nameRef = useRef(null);
+
+  useEffect(() => {
+    nameRef.current?.focus();
+  }, []);
 
   const set = (k, v) => {
     setForm(f => ({ ...f, [k]: v }));
@@ -188,6 +195,7 @@ function RoomModal({ mode, initial, rooms, onClose, onSubmit }) {
       setTimeout(() => firstErrRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
       return;
     }
+    setSaving(true);
     onSubmit({
       ...form,
       id: initial.id || Date.now(),
@@ -195,6 +203,7 @@ function RoomModal({ mode, initial, rooms, onClose, onSubmit }) {
       totalSlots: Number(form.totalSlots),
       usedSlots:  Number(form.usedSlots),
     });
+    setSaving(false);
     onClose();
   };
 
@@ -208,11 +217,12 @@ function RoomModal({ mode, initial, rooms, onClose, onSubmit }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-extrabold text-navy text-lg">{mode === 'add' ? '+ Add Room' : '✎ Edit Room'}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-muted transition-colors"><FaTimes /></button>
+          <h3 id="modal-title" className="font-extrabold text-navy text-lg">{mode === 'add' ? '+ Add Room' : '✎ Edit Room'}</h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-muted transition-colors" aria-label="Close modal"><FaTimes /></button>
         </div>
 
         <p className="text-[11px] text-slate-400 mb-4">Changes update utilization charts automatically</p>
@@ -220,48 +230,57 @@ function RoomModal({ mode, initial, rooms, onClose, onSubmit }) {
         <div className="space-y-3" ref={firstErrRef}>
           {/* Room Name */}
           <div>
-            <label className="text-xs font-bold text-muted mb-1 block">Room Name *</label>
+            <label htmlFor="field-room-name" className="text-xs font-bold text-muted mb-1 block">Room Name *</label>
             <input
               id="field-room-name" placeholder="e.g. A101"
               value={form.name} onChange={e => set('name', e.target.value)}
+              onBlur={e => set('name', e.target.value.trim())}
               className={inputCls('name')}
+              ref={nameRef}
+              aria-required="true"
             />
             <FieldErr k="name" />
           </div>
 
           {/* Room Type */}
           <div>
-            <label className="text-xs font-bold text-muted mb-1 block">Room Type *</label>
+            <label htmlFor="field-room-type" className="text-xs font-bold text-muted mb-1 block">Room Type *</label>
             <select
               id="field-room-type"
               value={form.type} onChange={e => set('type', e.target.value)}
               className={inputCls('type')}
+              aria-required="true"
             >
               <option value="" disabled>Select Room Type</option>
               {ROOM_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
-            <FieldErr k="type" />
+            {errors.type
+              ? <FieldErr k="type" />
+              : <p className="text-[10px] text-slate-400 mt-1">Room type affects utilization analytics</p>
+            }
           </div>
 
           {/* Capacity / Total Slots */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-bold text-muted mb-1 block">Capacity *</label>
+              <label htmlFor="field-capacity" className="text-xs font-bold text-muted mb-1 block">Capacity *</label>
               <input
                 id="field-capacity" type="number" placeholder="e.g. 60" min="1"
                 value={form.capacity} onChange={e => set('capacity', e.target.value)}
                 onKeyDown={e => ['-', 'e', '+', '.'].includes(e.key) && e.preventDefault()}
                 className={inputCls('capacity')}
+                aria-required="true"
               />
               <FieldErr k="capacity" />
             </div>
             <div>
-              <label className="text-xs font-bold text-muted mb-1 block">Total Slots *</label>
+              <label htmlFor="field-total-slots" className="text-xs font-bold text-muted mb-1 block">Total Slots *</label>
               <input
                 id="field-total-slots" type="number" placeholder="e.g. 10" min="1"
                 value={form.totalSlots} onChange={e => set('totalSlots', e.target.value)}
                 onKeyDown={e => ['-', 'e', '+', '.'].includes(e.key) && e.preventDefault()}
                 className={inputCls('totalSlots')}
+                aria-required="true"
               />
               <FieldErr k="totalSlots" />
             </div>
@@ -269,19 +288,20 @@ function RoomModal({ mode, initial, rooms, onClose, onSubmit }) {
 
           {/* Used Slots */}
           <div>
-            <label className="text-xs font-bold text-muted mb-1 block">Used Slots *</label>
+            <label htmlFor="field-used-slots" className="text-xs font-bold text-muted mb-1 block">Used Slots *</label>
             <input
               id="field-used-slots" type="number" placeholder="e.g. 8" min="0"
               value={form.usedSlots} onChange={e => set('usedSlots', e.target.value)}
               onKeyDown={e => ['-', 'e', '+', '.'].includes(e.key) && e.preventDefault()}
               className={inputCls('usedSlots')}
+              aria-required="true"
             />
             <FieldErr k="usedSlots" />
           </div>
 
           {/* Peak Time (optional) */}
           <div>
-            <label className="text-xs font-bold text-muted mb-1 block">Peak Time <span className="font-normal">(optional)</span></label>
+            <label htmlFor="field-peak" className="text-xs font-bold text-muted mb-1 block">Peak Time <span className="font-normal">(optional)</span></label>
             <input
               id="field-peak" placeholder="e.g. Mon 08:00"
               value={form.peak} onChange={e => set('peak', e.target.value)}
@@ -290,8 +310,9 @@ function RoomModal({ mode, initial, rooms, onClose, onSubmit }) {
           </div>
 
           {/* Lab checkbox */}
-          <label className="flex items-center gap-2.5 cursor-pointer select-none">
+          <label htmlFor="field-is-lab" className="flex items-center gap-2.5 cursor-pointer select-none">
             <input
+              id="field-is-lab"
               type="checkbox" checked={form.isLab}
               onChange={e => set('isLab', e.target.checked)}
               className="w-4 h-4 accent-emerald-600 rounded"
@@ -303,18 +324,20 @@ function RoomModal({ mode, initial, rooms, onClose, onSubmit }) {
         {/* Actions */}
         <div className="flex gap-3 mt-5">
           <button onClick={onClose}
-            className="flex-1 py-2.5 text-sm font-semibold border border-slate-200 rounded-xl text-muted hover:bg-slate-50 transition-colors">
+            className="flex-1 py-2.5 text-sm font-semibold border border-slate-200 rounded-xl text-muted hover:bg-slate-50 transition-colors"
+            aria-label="Cancel room changes">
             Cancel
           </button>
           <span title={!formReady ? 'Please fill all required fields' : ''} className="flex-1">
             <button
               id="btn-room-save"
               onClick={submit}
-              disabled={!formReady}
+              disabled={!formReady || saving}
               className="w-full py-2.5 text-sm font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-500 rounded-xl shadow-md hover:from-emerald-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+              aria-label={mode === 'add' ? 'Add room' : 'Save room changes'}
             >
-              <FaSave className="text-xs" />
-              {mode === 'add' ? 'Add Room' : 'Save Changes'}
+              {saving ? <FaSpinner className="animate-spin" /> : <FaSave className="text-xs" />}
+              {saving ? 'Saving...' : (mode === 'add' ? 'Add Room' : 'Save Changes')}
             </button>
           </span>
         </div>
@@ -473,22 +496,25 @@ export default function ResourceUtilization() {
       {/* ── Delete Confirm Modal ── */}
       {delId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 ru-fade-in">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-rose-100 flex items-center justify-center text-rose-500 text-xl"><FaTrash /></div>
+              <div className="w-12 h-12 rounded-xl bg-rose-100 flex items-center justify-center text-rose-500 text-xl ru-warn-pulse">
+                <FaExclamationTriangle />
+              </div>
               <div>
                 <h3 className="font-extrabold text-navy">Delete Room</h3>
-                <p className="text-xs text-muted mt-0.5">This action cannot be undone.</p>
+                <p className="text-xs text-muted mt-0.5">This will permanently delete the room.</p>
               </div>
             </div>
-            <p className="text-sm text-slate-600 mb-5">
+            <p className="text-sm text-slate-600 mb-1">
               Are you sure you want to delete <strong>"{rooms.find(r => r.id === delId)?.name}"</strong>?
             </p>
+            <p className="text-xs text-rose-500 font-semibold mb-5">⚠ This action cannot be undone.</p>
             <div className="flex gap-3 justify-end">
-              <button onClick={() => setDelId(null)} className="px-4 py-2 text-xs font-bold rounded-lg border border-slate-200 text-muted hover:bg-slate-50 transition-colors">Cancel</button>
-              <button id="btn-confirm-delete-room" onClick={handleDelete}
-                className="px-5 py-2 text-xs font-extrabold rounded-lg bg-rose-500 text-white hover:bg-rose-600 transition-all shadow-sm">
-                Delete
+              <button onClick={() => setDelId(null)} aria-label="Cancel delete" className="px-4 py-2 text-xs font-bold rounded-lg border border-slate-200 text-muted hover:bg-slate-50 transition-colors">Cancel</button>
+              <button id="btn-confirm-delete-room" onClick={handleDelete} aria-label="Confirm delete room"
+                className="inline-flex items-center gap-2 px-5 py-2 text-xs font-extrabold rounded-lg bg-rose-500 text-white hover:bg-rose-600 transition-all shadow-sm">
+                <FaTrash className="text-[10px]" /> Yes, Delete
               </button>
             </div>
           </div>
@@ -503,24 +529,28 @@ export default function ResourceUtilization() {
         <span className="text-slate-300 dark:text-slate-700">/</span>
         <span className="text-sm font-semibold">Resource Utilization</span>
         <div className="ml-auto flex items-center gap-2 flex-wrap">
-          {/* Add Room */}
+          {/* Add Room — disabled while modal open */}
           <button
             id="btn-add-room"
             onClick={openAdd}
-            className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-full bg-primary text-white hover:bg-primary/90 transition-all shadow-sm"
+            disabled={!!modal}
+            aria-label="Add a new room"
+            title={modal ? 'Close the current modal first' : 'Add a new room'}
+            className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-full bg-primary text-white hover:bg-primary/90 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <FaPlus className="text-[10px]" /> Add Room
           </button>
           {/* Generate Utilization */}
-          <span title={noData ? 'Add rooms before generating' : ''}>
+          <span title={noData ? 'Add rooms before generating utilization' : generating ? 'Calculation in progress…' : 'Generate utilization report'}>
             <button
               id="btn-generate-util"
               onClick={handleGenerate}
               disabled={noData || generating}
-              className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              aria-label="Generate resource utilization"
+              className={`inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed ${generating ? 'ru-pulse' : ''}`}
             >
               {generating
-                ? <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> Calculating…</>
+                ? <><FaSpinner className="animate-spin text-[10px]" /> Calculating…</>
                 : <><FaCheckCircle className="text-[10px]" /> Generate Utilization</>
               }
             </button>
@@ -694,10 +724,18 @@ export default function ResourceUtilization() {
             <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
               <h2 className="text-xl font-extrabold text-navy dark:text-white">All Rooms</h2>
               <div className="flex flex-wrap gap-2">
-                {['all', 'overbooked', 'high', 'normal', 'unused'].map(k => (
+                {[
+                  { k: 'all',        l: 'All',        tip: 'Show all rooms'                          },
+                  { k: 'overbooked', l: 'Overbooked',  tip: 'Rooms with all slots occupied'           },
+                  { k: 'high',       l: 'High',        tip: 'Rooms nearing full capacity'             },
+                  { k: 'normal',     l: 'Normal',       tip: 'Rooms with normal usage levels'         },
+                  { k: 'unused',     l: 'Unused',       tip: 'Rooms not used this week'               },
+                ].map(({ k, l, tip }) => (
                   <button key={k} id={`room-filter-${k}`} onClick={() => handleFilter(k)}
-                    className={`text-xs font-bold px-3 py-1.5 rounded-full border transition-all ${filter === k ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-800 text-muted dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-emerald-400'}`}>
-                    {k.charAt(0).toUpperCase() + k.slice(1)}
+                    title={tip}
+                    aria-label={`Filter: ${l} — ${tip}`}
+                    className={`text-xs font-bold px-3 py-1.5 rounded-full border transition-all duration-200 ${filter === k ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-white dark:bg-slate-800 text-muted dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-emerald-400 hover:text-emerald-600'}`}>
+                    {l}
                   </button>
                 ))}
               </div>
@@ -755,10 +793,14 @@ export default function ResourceUtilization() {
       <style>{`
         .reveal-on-scroll { opacity:0; transform:translateY(24px); transition:opacity .55s ease,transform .55s ease; }
         .reveal-on-scroll.is-visible { opacity:1; transform:translateY(0); }
-        @keyframes ru-shrink { from{transform:scaleX(1)} to{transform:scaleX(0)} }
-        @keyframes ru-fade-in { from{opacity:0;transform:translateY(-3px)} to{opacity:1;transform:translateY(0)} }
-        .ru-fade-in { animation: ru-fade-in 0.2s ease forwards; }
-        @keyframes spin { to{transform:rotate(360deg)} }
+        @keyframes ru-shrink    { from{transform:scaleX(1)} to{transform:scaleX(0)} }
+        @keyframes ru-fade-in   { from{opacity:0;transform:translateY(-3px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes ru-warn-pulse{ 0%,100%{transform:scale(1)} 50%{transform:scale(1.15)} }
+        @keyframes ru-pulse-btn { 0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,.5)} 70%{box-shadow:0 0 0 6px rgba(16,185,129,0)} }
+        @keyframes spin         { to{transform:rotate(360deg)} }
+        .ru-fade-in   { animation: ru-fade-in    0.22s ease forwards; }
+        .ru-warn-pulse{ animation: ru-warn-pulse 1s ease-in-out 3; }
+        .ru-pulse     { animation: ru-pulse-btn  1.2s ease-in-out infinite; }
         .animate-spin { animation: spin 0.7s linear infinite; }
       `}</style>
     </div>
