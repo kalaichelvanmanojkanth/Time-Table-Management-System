@@ -86,7 +86,24 @@ function useToast() {
 const MAX_H = 20;
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const SLOTS = ['8:00–9:00', '9:00–10:00', '10:00–11:00', '11:00–12:00', '13:00–14:00', '14:00–15:00', '15:00–16:00', '16:00–17:00'];
-const CLASSES = ['CSE-A', 'CSE-B', 'ECE-A', 'ECE-B', 'MECH-A', 'IT-A', 'IT-B'];
+const CLASSES  = ['A401', 'A402', 'A403', 'A404', 'B501', 'B502', 'F1303', 'F1301'];
+const SUBJECTS      = ['ITPM', 'NDM', 'PAF', 'ESD', 'HCI', 'IAS', 'DS', 'DSA'];
+const DEPT_OPTIONS  = [
+  'Information Technology',
+  'Computer Science',
+  'Computer System Engineering',
+  'Computer System Networks',
+];
+const TEACHER_OPTIONS = [
+  'Dr. Nimal Perera',
+  'Prof. Kasun Silva',
+  'Mr. Chamara Fernando',
+  'Ms. Dilani Jayawardena',
+  'Mr. Tharindu Wijesinghe',
+  'Ms. Sanduni Peris',
+  'Dr. Ruwan Gunasekara',
+  'Mr. Supun Herath',
+];
 
 const INITIAL = [
   { id: 1, name: 'Dr. Anita Sharma',   dept: 'Computer Science', subject: 'Algorithms',      cls: 'CSE-A', hours: 22, max: MAX_H, days: ['Mon','Wed','Fri'], slots: ['8:00–9:00','9:00–10:00'] },
@@ -138,6 +155,8 @@ export default function TeacherWorkload() {
   const [errors, setErrors]     = useState({});
   const [delId, setDelId]       = useState(null);   // confirm-delete id
   const { list, dismiss, toast } = useToast();
+  const firstErrRef = useRef(null);
+  const teacherDropRef = useRef(null);
 
   /* ── computed ── */
   const withStatus = teachers.map(t => ({ ...t, status: getStatus(t.hours) }));
@@ -155,22 +174,23 @@ export default function TeacherWorkload() {
   /* ── VALIDATION ── */
   function validate(f, currentId = null) {
     const e = {};
-    if (!f.name.trim())    e.name    = 'Teacher name is required';
-    if (!f.subject.trim()) e.subject = 'Subject is required';
-    if (!f.cls)            e.cls     = 'Class is required';
-    if (!f.hours || Number(f.hours) <= 0) e.hours = 'Weekly hours must be > 0';
-    else if (Number(f.hours) > MAX_H)     e.hours = `Cannot exceed ${MAX_H}h/week`;
-    if (f.days.length === 0)  e.days  = 'Select at least one day';
-    if (f.slots.length === 0) e.slots = 'Select at least one time slot';
+    if (!f.dept)                              e.dept    = 'Department selection is required';
+    if (!f.name.trim())                       e.name    = 'Teacher selection is required';
+    if (!f.subject)                           e.subject = 'Subject selection is required';
+    if (!f.cls)                               e.cls     = 'Class selection is required';
+    if (!f.hours || Number(f.hours) <= 0)     e.hours   = 'Weekly hours must be greater than zero';
+    else if (Number(f.hours) > MAX_H)         e.hours   = `Weekly hours cannot exceed ${MAX_H} hours`;
+    if (f.days.length === 0)                  e.days    = 'Select at least one day';
+    if (f.slots.length === 0)                 e.slots   = 'Select at least one time slot';
 
     // duplicate check: same teacher + subject + class
     const dup = teachers.find(t =>
       t.id !== currentId &&
       t.name.trim().toLowerCase() === f.name.trim().toLowerCase() &&
-      t.subject.trim().toLowerCase() === f.subject.trim().toLowerCase() &&
+      t.subject.toLowerCase() === f.subject.toLowerCase() &&
       t.cls === f.cls
     );
-    if (dup) e.dup = 'Duplicate: this teacher already has this subject in this class';
+    if (dup) e.dup = 'Duplicate workload not allowed';
 
     // overlapping slot check for same teacher (different record)
     const sameTeacher = teachers.filter(t => t.id !== currentId && t.name.trim().toLowerCase() === f.name.trim().toLowerCase());
@@ -178,19 +198,28 @@ export default function TeacherWorkload() {
       const dayOverlap  = f.days.some(d => t.days.includes(d));
       const slotOverlap = f.slots.some(s => t.slots.includes(s));
       if (dayOverlap && slotOverlap) {
-        e.overlap = `Overlapping time slot with existing record (${t.subject} – ${t.cls})`;
+        e.overlap = `Time slot overlap detected (${t.subject} – ${t.cls})`;
         break;
       }
     }
     return e;
   }
 
+  /* ── form is valid enough to enable Save ── */
+  const formReady = form.dept && form.name.trim() && form.subject && form.cls &&
+                    form.hours && Number(form.hours) > 0 && Number(form.hours) <= MAX_H &&
+                    form.days.length > 0 && form.slots.length > 0;
+
   /* ── form helpers ── */
   const toggleArr = (arr, val) => arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val];
+
+  // clear a single field's error when user corrects it
+  const clearErr = (key) => setErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
 
   function openAdd() {
     setForm(EMPTY_FORM); setErrors({}); setEditId(null); setModal('add');
     toast.info('Fill in teacher workload details', 'Info', 3000);
+    setTimeout(() => teacherDropRef.current?.focus(), 100);
   }
   function openEdit(t) {
     setForm({ name: t.name, dept: t.dept, subject: t.subject, cls: t.cls, hours: String(t.hours), days: [...t.days], slots: [...t.slots] });
@@ -198,23 +227,28 @@ export default function TeacherWorkload() {
     toast.info(`Editing workload for ${t.name}`, 'Info', 3000);
   }
 
+  /* ── auto-scroll to first error ── */
+  function scrollToFirstError() {
+    setTimeout(() => firstErrRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+  }
+
   /* ── CREATE ── */
   function handleCreate() {
     const e = validate(form);
-    if (Object.keys(e).length) { setErrors(e); toast.error('Please fix validation errors before saving', 'Error'); return; }
+    if (Object.keys(e).length) { setErrors(e); scrollToFirstError(); return; }
     const newT = { ...form, id: Date.now(), hours: Number(form.hours), max: MAX_H, days: form.days, slots: form.slots };
     setTeachers(p => [...p, newT]);
     setModal(null);
-    toast.success(`${form.name} added successfully`, 'Success');
+    toast.success('Workload added successfully', 'Success');
   }
 
   /* ── UPDATE ── */
   function handleUpdate() {
     const e = validate(form, editId);
-    if (Object.keys(e).length) { setErrors(e); toast.error('Please fix validation errors before saving', 'Error'); return; }
+    if (Object.keys(e).length) { setErrors(e); scrollToFirstError(); return; }
     setTeachers(p => p.map(t => t.id === editId ? { ...t, ...form, hours: Number(form.hours) } : t));
     setModal(null);
-    toast.success(`Workload updated for ${form.name}`, 'Success');
+    toast.success('Workload updated successfully', 'Success');
   }
 
   /* ── DELETE ── */
@@ -227,7 +261,7 @@ export default function TeacherWorkload() {
     const t = teachers.find(x => x.id === delId);
     setTeachers(p => p.filter(x => x.id !== delId));
     setDelId(null);
-    toast.success(`Deleted workload for ${t?.name}`, 'Success');
+    toast.success('Workload deleted successfully', 'Success');
   }
 
   /* ── filter with toast ── */
@@ -507,24 +541,46 @@ export default function TeacherWorkload() {
               <h3 className="text-lg font-extrabold">{modal==='add' ? '+ Add Teacher Workload' : '✎ Edit Teacher Workload'}</h3>
               <button onClick={() => setModal(null)} className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-colors"><FaTimes className="text-xs" /></button>
             </div>
-            <div className="px-6 py-5 space-y-4">
+            <div className="px-6 py-5 space-y-4" ref={firstErrRef}>
 
-              {/* global errors */}
-              {errors.dup && <div className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-4 py-2">⚠ {errors.dup}</div>}
-              {errors.overlap && <div className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-4 py-2">⚠ {errors.overlap}</div>}
+              {/* global errors (dup / overlap) */}
+              {errors.dup    && <div className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-4 py-2 tw-fade-in">⚠ {errors.dup}</div>}
+              {errors.overlap && <div className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-4 py-2 tw-fade-in">⚠ {errors.overlap}</div>}
 
               {/* row: name / dept */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-muted mb-1">Teacher Name *</label>
-                  <input id="field-name" value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))}
-                    className={`w-full px-3 py-2 text-sm border rounded-lg outline-none transition-all ${errors.name?'border-rose-400 bg-rose-50':'border-slate-200 focus:border-primary'}`} placeholder="Dr. John Doe" />
-                  {errors.name && <p className="text-[10px] text-rose-500 mt-1">{errors.name}</p>}
+                  <select
+                    id="field-name"
+                    ref={teacherDropRef}
+                    value={form.name}
+                    onChange={e => { setForm(p => ({ ...p, name: e.target.value })); clearErr('name'); }}
+                    className={`w-full px-3 py-2 text-sm border rounded-lg outline-none transition-all ${errors.name ? 'border-rose-400 bg-rose-50' : 'border-slate-200 focus:border-primary'}`}
+                  >
+                    <option value="" disabled>Select Teacher</option>
+                    {TEACHER_OPTIONS.map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                  {errors.name
+                    ? <p className="text-[10px] text-rose-500 mt-1 tw-fade-in flex items-center gap-1"><FaExclamationTriangle className="flex-shrink-0" />{errors.name}</p>
+                    : <p className="text-[10px] text-slate-400 mt-1">Select teacher to calculate workload analytics</p>
+                  }
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-muted mb-1">Department</label>
-                  <input id="field-dept" value={form.dept} onChange={e=>setForm(p=>({...p,dept:e.target.value}))}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:border-primary transition-all" placeholder="Computer Science" />
+                  <label className="block text-xs font-bold text-muted mb-1">Department *</label>
+                  <select
+                    id="field-dept"
+                    value={form.dept}
+                    onChange={e => { setForm(p => ({ ...p, dept: e.target.value })); clearErr('dept'); }}
+                    className={`w-full px-3 py-2 text-sm border rounded-lg outline-none transition-all ${errors.dept ? 'border-rose-400 bg-rose-50' : 'border-slate-200 focus:border-primary'}`}
+                  >
+                    <option value="" disabled>Select Department</option>
+                    {DEPT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                  {errors.dept
+                    ? <p className="text-[10px] text-rose-500 mt-1 tw-fade-in flex items-center gap-1"><FaExclamationTriangle className="flex-shrink-0" />{errors.dept}</p>
+                    : <p className="text-[10px] text-slate-400 mt-1">Department affects workload analytics</p>
+                  }
                 </div>
               </div>
 
@@ -532,30 +588,48 @@ export default function TeacherWorkload() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-muted mb-1">Subject *</label>
-                  <input id="field-subject" value={form.subject} onChange={e=>setForm(p=>({...p,subject:e.target.value}))}
-                    className={`w-full px-3 py-2 text-sm border rounded-lg outline-none transition-all ${errors.subject?'border-rose-400 bg-rose-50':'border-slate-200 focus:border-primary'}`} placeholder="Algorithms" />
-                  {errors.subject && <p className="text-[10px] text-rose-500 mt-1">{errors.subject}</p>}
+                  <select
+                    id="field-subject"
+                    value={form.subject}
+                    onChange={e => { setForm(p => ({ ...p, subject: e.target.value })); clearErr('subject'); }}
+                    className={`w-full px-3 py-2 text-sm border rounded-lg outline-none transition-all ${errors.subject ? 'border-rose-400 bg-rose-50' : 'border-slate-200 focus:border-primary'}`}
+                  >
+                    <option value="">Select Subject</option>
+                    {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  {errors.subject && <p className="text-[10px] text-rose-500 mt-1 tw-fade-in flex items-center gap-1"><FaExclamationTriangle className="flex-shrink-0" />{errors.subject}</p>}
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-muted mb-1">Class *</label>
-                  <select id="field-class" value={form.cls} onChange={e=>setForm(p=>({...p,cls:e.target.value}))}
-                    className={`w-full px-3 py-2 text-sm border rounded-lg outline-none transition-all ${errors.cls?'border-rose-400 bg-rose-50':'border-slate-200 focus:border-primary'}`}>
-                    <option value="">Select class</option>
+                  <select
+                    id="field-class"
+                    value={form.cls}
+                    onChange={e => { setForm(p => ({ ...p, cls: e.target.value })); clearErr('cls'); }}
+                    className={`w-full px-3 py-2 text-sm border rounded-lg outline-none transition-all ${errors.cls ? 'border-rose-400 bg-rose-50' : 'border-slate-200 focus:border-primary'}`}
+                  >
+                    <option value="">Select Class</option>
                     {CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
-                  {errors.cls && <p className="text-[10px] text-rose-500 mt-1">{errors.cls}</p>}
+                  {errors.cls && <p className="text-[10px] text-rose-500 mt-1 tw-fade-in flex items-center gap-1"><FaExclamationTriangle className="flex-shrink-0" />{errors.cls}</p>}
                 </div>
               </div>
 
               {/* hours */}
               <div>
                 <label className="block text-xs font-bold text-muted mb-1">Weekly Hours * <span className="font-normal">(max {MAX_H}h)</span></label>
-                <input id="field-hours" type="number" min="1" max={MAX_H} value={form.hours} onChange={e=>setForm(p=>({...p,hours:e.target.value}))}
-                  className={`w-full px-3 py-2 text-sm border rounded-lg outline-none transition-all ${errors.hours?'border-rose-400 bg-rose-50':'border-slate-200 focus:border-primary'}`} placeholder="e.g. 16" />
-                {errors.hours && <p className="text-[10px] text-rose-500 mt-1">{errors.hours}</p>}
-                {form.hours && Number(form.hours) > MAX_H-2 && Number(form.hours) <= MAX_H && (
-                  <p className="text-[10px] text-amber-500 mt-1">⚠ Near maximum limit</p>
-                )}
+                <input
+                  id="field-hours" type="number" min="1" max={MAX_H}
+                  value={form.hours}
+                  onChange={e => { setForm(p => ({ ...p, hours: e.target.value })); clearErr('hours'); }}
+                  onKeyDown={e => { if (['-', 'e', '+', '.'].includes(e.key)) e.preventDefault(); }}
+                  className={`w-full px-3 py-2 text-sm border rounded-lg outline-none transition-all ${errors.hours ? 'border-rose-400 bg-rose-50' : 'border-slate-200 focus:border-primary'}`}
+                  placeholder="e.g. 16"
+                />
+                {errors.hours
+                  ? <p className="text-[10px] text-rose-500 mt-1 tw-fade-in flex items-center gap-1"><FaExclamationTriangle className="flex-shrink-0" />{errors.hours}</p>
+                  : form.hours && Number(form.hours) > MAX_H - 2 && Number(form.hours) <= MAX_H &&
+                    <p className="text-[10px] text-amber-500 mt-1">⚠ Near maximum limit</p>
+                }
               </div>
 
               {/* days */}
@@ -563,13 +637,14 @@ export default function TeacherWorkload() {
                 <label className="block text-xs font-bold text-muted mb-2">Assigned Days *</label>
                 <div className="flex flex-wrap gap-2">
                   {DAYS.map(d => (
-                    <button key={d} type="button" onClick={()=>setForm(p=>({...p,days:toggleArr(p.days,d)}))}
-                      className={`text-xs font-bold px-3 py-1.5 rounded-full border transition-colors ${form.days.includes(d)?'bg-primary text-white border-primary':'bg-white text-muted border-slate-200 hover:border-primary'}`}>
+                    <button key={d} type="button"
+                      onClick={() => { setForm(p => ({ ...p, days: toggleArr(p.days, d) })); clearErr('days'); }}
+                      className={`text-xs font-bold px-3 py-1.5 rounded-full border transition-colors ${form.days.includes(d) ? 'bg-primary text-white border-primary' : 'bg-white text-muted border-slate-200 hover:border-primary'}`}>
                       {d}
                     </button>
                   ))}
                 </div>
-                {errors.days && <p className="text-[10px] text-rose-500 mt-1">{errors.days}</p>}
+                {errors.days && <p className="text-[10px] text-rose-500 mt-1 tw-fade-in flex items-center gap-1"><FaExclamationTriangle className="flex-shrink-0" />{errors.days}</p>}
               </div>
 
               {/* slots */}
@@ -577,22 +652,29 @@ export default function TeacherWorkload() {
                 <label className="block text-xs font-bold text-muted mb-2">Time Slots *</label>
                 <div className="flex flex-wrap gap-2">
                   {SLOTS.map(s => (
-                    <button key={s} type="button" onClick={()=>setForm(p=>({...p,slots:toggleArr(p.slots,s)}))}
-                      className={`text-xs font-bold px-3 py-1.5 rounded-full border transition-colors ${form.slots.includes(s)?'bg-primary text-white border-primary':'bg-white text-muted border-slate-200 hover:border-primary'}`}>
+                    <button key={s} type="button"
+                      onClick={() => { setForm(p => ({ ...p, slots: toggleArr(p.slots, s) })); clearErr('slots'); }}
+                      className={`text-xs font-bold px-3 py-1.5 rounded-full border transition-colors ${form.slots.includes(s) ? 'bg-primary text-white border-primary' : 'bg-white text-muted border-slate-200 hover:border-primary'}`}>
                       {s}
                     </button>
                   ))}
                 </div>
-                {errors.slots && <p className="text-[10px] text-rose-500 mt-1">{errors.slots}</p>}
+                {errors.slots && <p className="text-[10px] text-rose-500 mt-1 tw-fade-in flex items-center gap-1"><FaExclamationTriangle className="flex-shrink-0" />{errors.slots}</p>}
               </div>
             </div>
 
             <div className="flex gap-3 px-6 pb-5 justify-end">
               <button onClick={() => setModal(null)} className="px-4 py-2 text-xs font-bold rounded-lg border border-slate-200 text-muted hover:bg-slate-50 transition-colors">Cancel</button>
-              <button id="btn-save" onClick={modal==='add' ? handleCreate : handleUpdate}
-                className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-extrabold rounded-lg bg-primary text-white hover:bg-primary/90 transition-all shadow-sm">
-                <FaSave className="text-[10px]" /> {modal==='add' ? 'Add Workload' : 'Save Changes'}
-              </button>
+              <span title={!formReady ? 'Please fill all required fields' : ''}>
+                <button
+                  id="btn-save"
+                  onClick={modal === 'add' ? handleCreate : handleUpdate}
+                  disabled={!formReady}
+                  className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-extrabold rounded-lg bg-primary text-white hover:bg-primary/90 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <FaSave className="text-[10px]" /> {modal === 'add' ? 'Add Workload' : 'Save Changes'}
+                </button>
+              </span>
             </div>
           </div>
         </div>
@@ -626,6 +708,8 @@ export default function TeacherWorkload() {
         .reveal-on-scroll { opacity:0; transform:translateY(24px); transition:opacity .55s ease,transform .55s ease; }
         .reveal-on-scroll.is-visible { opacity:1; transform:translateY(0); }
         @keyframes tw-shrink { from{transform:scaleX(1)} to{transform:scaleX(0)} }
+        @keyframes tw-fade-in { from{opacity:0;transform:translateY(-3px)} to{opacity:1;transform:translateY(0)} }
+        .tw-fade-in { animation: tw-fade-in 0.2s ease forwards; }
       `}</style>
     </div>
   );
