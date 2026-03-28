@@ -41,7 +41,7 @@ const Register = () => {
         password: formData.password,
       });
       toast.success('Registration successful!');
-      navigate('/dashboard');
+      navigate('/timetable');
     } catch (error) {
       toast.error(
         error.response?.data?.message ||

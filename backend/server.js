@@ -33,6 +33,11 @@ app.use(express.urlencoded({ extended: false }));
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/products', require('./routes/productRoutes'));
+app.use('/api/courses', require('./routes/courseRoutes'));
+app.use('/api/lecturers', require('./routes/lecturerRoutes'));
+app.use('/api/rooms', require('./routes/roomRoutes'));
+app.use('/api/timeslots', require('./routes/timeslotRoutes'));
+app.use('/api/timetables', require('./routes/timetableRoutes'));
 
 // Health check route with DB status
 app.get('/api/health', (req, res) => {
