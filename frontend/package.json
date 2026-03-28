@@ -1,5 +1,5 @@
 {
-  "name": "mern-frontend",
+  "name": "classroom-management-client",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -9,17 +9,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "axios": "^1.7.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-icons": "^5.3.0",
-    "react-router-dom": "^6.27.0",
-    "react-toastify": "^10.0.5"
+    "react-router-dom": "^6.30.1",
+    "university-timetable-classroom-service": "file:.."
   },
   "devDependencies": {
-    "@types/react": "^18.3.11",
-    "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.2",
-    "vite": "^5.4.9"
+    "@vitejs/plugin-react": "^4.3.3",
+    "vite": "^5.4.10"
   }
 }
