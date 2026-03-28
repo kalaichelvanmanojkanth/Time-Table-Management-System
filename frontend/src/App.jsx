@@ -1,88 +1,121 @@
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
-import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+<<<<<<< HEAD
+import { useEffect, useState } from "react";
+import { BrowserRouter, Navigate, NavLink, Route, Routes } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { BrowserRouter, Navigate, NavLink, Route, Routes } from "react-router-dom";
+import ClassroomManagementPage from "./pages/ClassroomManagementPage";
+import UserClassroomPage from "./pages/UserClassroomPage";
 
-import { AuthProvider } from './context/AuthContext';
-import Navbar from './components/Navbar';
-import ProtectedRoute from './components/ProtectedRoute';
+const ADMIN_PASSWORD = "1234";
+const ADMIN_AUTH_KEY = "utm_admin_auth";
 
-import Home from './pages/Home';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
-import ProductList from './pages/ProductList';
-import CreateProduct from './pages/CreateProduct';
-import EditProduct from './pages/EditProduct';
-import Analytics from './pages/analytics/Analytics';
-import TeacherWorkload from './pages/analytics/TeacherWorkload';
-import SubjectDistribution from './pages/analytics/SubjectDistribution';
-import ResourceUtilization from './pages/analytics/ResourceUtilization';
-import Reports from './pages/analytics/Reports';
+function AdminLogin({ onLogin }) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
-/* Hide the legacy Navbar on the homepage — Home.jsx has its own premium navbar */
-function AppShell() {
-  const { pathname } = useLocation();
-  const showNavbar = pathname !== '/' && !pathname.startsWith('/analytics');
+  const handleSubmit = (event) => {
+    event.preventDefault();
+
+    if (password === ADMIN_PASSWORD) {
+      onLogin();
+      setPassword("");
+      setError("");
+      return;
+    }
+
+    setError("Incorrect password. Try again.");
+  };
 
   return (
-    <div className="app">
-      {showNavbar && <Navbar />}
-      <main className={showNavbar ? 'main-content' : ''}>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <div className="container">
-                  <Dashboard />
-                </div>
-              </ProtectedRoute>
-            }
-          />
-          <Route path="/products" element={<div className="container"><ProductList /></div>} />
-          <Route
-            path="/products/new"
-            element={
-              <ProtectedRoute>
-                <div className="container">
-                  <CreateProduct />
-                </div>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/products/:id/edit"
-            element={
-              <ProtectedRoute>
-                <div className="container">
-                  <EditProduct />
-                </div>
-              </ProtectedRoute>
-            }
-          />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/analytics/teacher-workload" element={<TeacherWorkload />} />
-          <Route path="/analytics/subject-distribution" element={<SubjectDistribution />} />
-          <Route path="/analytics/resource-utilization" element={<ResourceUtilization />} />
-          <Route path="/analytics/reports" element={<Reports />} />
-        </Routes>
-      </main>
-      <ToastContainer position="bottom-right" autoClose={3000} />
-    </div>
+    <main className="classroom-page">
+      <section className="panel admin-login-panel">
+        <p className="eyebrow">Admin access</p>
+        <h2>Enter admin password</h2>
+        <p className="hero-copy">
+          This page is protected. Enter the admin password to continue to the management dashboard.
+        </p>
+
+        {error ? <div className="feedback error">{error}</div> : null}
+
+        <form className="admin-login-form" onSubmit={handleSubmit}>
+          <label>
+            Password
+            <input
+              autoComplete="current-password"
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Enter password"
+              type="password"
+              value={password}
+            />
+          </label>
+          <button className="button primary" type="submit">
+            Login
+          </button>
+        </form>
+      </section>
+    </main>
   );
 }
 
 function App() {
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+
+  useEffect(() => {
+    const hasAuth = window.sessionStorage.getItem(ADMIN_AUTH_KEY) === "true";
+    setIsAdminAuthenticated(hasAuth);
+  }, []);
+
+  const handleAdminLogin = () => {
+    window.sessionStorage.setItem(ADMIN_AUTH_KEY, "true");
+    setIsAdminAuthenticated(true);
+  };
+
+  const handleAdminLogout = () => {
+    window.sessionStorage.removeItem(ADMIN_AUTH_KEY);
+    setIsAdminAuthenticated(false);
+  };
+
   return (
-    <Router>
-      <AuthProvider>
-        <AppShell />
-      </AuthProvider>
-    </Router>
+    <BrowserRouter>
+      <div className="role-layout">
+        <header className="role-header">
+          <div>
+            <h1>UNIVERSITY TIMETABLE SYSTEM</h1>
+            
+          </div>
+          <nav className="role-nav">
+            <NavLink className={({ isActive }) => `role-link${isActive ? " active" : ""}`} to="/user">
+              User page
+            </NavLink>
+            <NavLink className={({ isActive }) => `role-link${isActive ? " active" : ""}`} to="/admin">
+              Admin page
+            </NavLink>
+            {isAdminAuthenticated ? (
+              <button className="button ghost role-logout" onClick={handleAdminLogout} type="button">
+                Logout
+              </button>
+            ) : null}
+          </nav>
+        </header>
+
+        <Routes>
+          <Route element={<Navigate replace to="/user" />} path="/" />
+          <Route element={<UserClassroomPage />} path="/user" />
+          <Route
+            element={
+              isAdminAuthenticated ? (
+                <ClassroomManagementPage />
+              ) : (
+                <AdminLogin onLogin={handleAdminLogin} />
+              )
+            }
+            path="/admin"
+          />
+        </Routes>
+      </div>
+    </BrowserRouter>
   );
 }
 
 export default App;
+          <Route path="/analytics" element={<Analytics />} />
