@@ -24,7 +24,7 @@ const Login = () => {
     try {
       await login(formData);
       toast.success('Login successful!');
-      navigate('/dashboard');
+      navigate('/timetable');
     } catch (error) {
       toast.error(
         error.response?.data?.message || 'Login failed. Please try again.'
