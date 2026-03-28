@@ -1,3 +1,6 @@
+<<<<<<< HEAD
+import { useEffect, useState } from "react";
+import { BrowserRouter, Navigate, NavLink, Route, Routes } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { BrowserRouter, Navigate, NavLink, Route, Routes } from "react-router-dom";
 import ClassroomManagementPage from "./pages/ClassroomManagementPage";
@@ -115,3 +118,4 @@ function App() {
 }
 
 export default App;
+          <Route path="/analytics" element={<Analytics />} />
