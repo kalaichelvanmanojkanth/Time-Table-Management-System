@@ -50,10 +50,10 @@ const CARDS = [
 ];
 
 const QUICK_STATS = [
-  { label: 'Faculty Members',   value: '6',    color: 'text-primary dark:text-blue-400'    },
-  { label: 'Active Subjects',   value: '12',   color: 'text-secondary dark:text-indigo-400' },
-  { label: 'Rooms Tracked',     value: '18',   color: 'text-emerald-500'                   },
-  { label: 'Reports Generated', value: '34',   color: 'text-amber-500'                     },
+  { label: 'Faculty Members', value: '6', color: 'text-primary dark:text-blue-400' },
+  { label: 'Active Subjects', value: '12', color: 'text-secondary dark:text-indigo-400' },
+  { label: 'Rooms Tracked', value: '18', color: 'text-emerald-500' },
+  { label: 'Reports Generated', value: '34', color: 'text-amber-500' },
 ];
 
 export default function Analytics() {
