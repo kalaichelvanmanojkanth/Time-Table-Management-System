@@ -14,12 +14,7 @@ function ClassroomFilters({ filters, onChange, onReset }) {
       <div className="filters-grid">
         <label>
           Building
-          <input
-            name="building"
-            onChange={onChange}
-            placeholder="Engineering"
-            value={filters.building}
-          />
+          <input name="building" onChange={onChange} placeholder="Engineering" value={filters.building} />
         </label>
 
         <label>
@@ -42,34 +37,17 @@ function ClassroomFilters({ filters, onChange, onReset }) {
 
         <label>
           Min Capacity
-          <input
-            min="0"
-            name="minCapacity"
-            onChange={onChange}
-            placeholder="30"
-            type="number"
-            value={filters.minCapacity}
-          />
+          <input min="0" name="minCapacity" onChange={onChange} placeholder="30" type="number" value={filters.minCapacity} />
         </label>
 
         <label>
           Resource
-          <input
-            name="resource"
-            onChange={onChange}
-            placeholder="projector"
-            value={filters.resource}
-          />
+          <input name="resource" onChange={onChange} placeholder="projector" value={filters.resource} />
         </label>
 
         <label className="checkbox-label">
           <span>Available only</span>
-          <input
-            checked={filters.availableOnly}
-            name="availableOnly"
-            onChange={onChange}
-            type="checkbox"
-          />
+          <input checked={filters.availableOnly} name="availableOnly" onChange={onChange} type="checkbox" />
         </label>
       </div>
     </section>

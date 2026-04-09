@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import ClassroomFilters from "../components/ClassroomFilters";
 import ClassroomTable from "../components/ClassroomTable";
 import ClassroomBot from "../components/ClassroomBot";
@@ -19,6 +19,7 @@ function UserClassroomPage() {
   const [maintenanceRooms, setMaintenanceRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedRoom, setSelectedRoom] = useState(null);
 
   const loadClassrooms = async (currentFilters) => {
     try {
@@ -35,11 +36,11 @@ function UserClassroomPage() {
           limit: 50,
         }),
       ]);
-
-      setClassrooms(filteredPayload.data);
-      setMaintenanceRooms(maintenancePayload.data);
+      const fetched = filteredPayload.data || [];
+      setClassrooms(fetched);
+      setMaintenanceRooms(maintenancePayload.data || []);
     } catch (loadError) {
-      setError(loadError.message);
+      setError(loadError.message || "Failed to load classrooms");
     } finally {
       setLoading(false);
     }
@@ -47,6 +48,7 @@ function UserClassroomPage() {
 
   useEffect(() => {
     loadClassrooms(filters);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleFilterChange = (event) => {
@@ -63,6 +65,12 @@ function UserClassroomPage() {
     setFilters(initialFilters);
     loadClassrooms(initialFilters);
   };
+
+  const handleViewDetails = (room) => {
+    setSelectedRoom(room);
+  };
+
+  const handleCloseDetails = () => setSelectedRoom(null);
 
   return (
     <main className="classroom-page">
@@ -93,7 +101,15 @@ function UserClassroomPage() {
       {error ? <div className="feedback error">{error}</div> : null}
 
       <section className="content-rail">
-        <ClassroomFilters filters={filters} onChange={handleFilterChange} onReset={handleResetFilters} />
+        <div className="panel">
+          <div className="flex items-center justify-between mb-4">
+            <ClassroomFilters filters={filters} onChange={handleFilterChange} onReset={handleResetFilters} />
+
+            <div className="flex items-center gap-2">
+              {/* No date/time filter in stable version - keep filters compact */}
+            </div>
+          </div>
+        </div>
 
         {loading ? (
           <section className="panel loading-panel">Loading classrooms...</section>
@@ -103,6 +119,7 @@ function UserClassroomPage() {
       </section>
 
       <ClassroomBot />
+
     </main>
   );
 }

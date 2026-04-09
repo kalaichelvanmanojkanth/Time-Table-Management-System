@@ -116,6 +116,7 @@ const FEATURES = [
     color: 'from-emerald-500 to-teal-600',
     glow: 'group-hover:shadow-[0_0_24px_rgba(16,185,129,0.25)]',
     ring: 'group-hover:ring-emerald-300 dark:group-hover:ring-emerald-700',
+    link: '/user',
   },
 ];
 
@@ -217,6 +218,7 @@ function TimetableMock() {
           {DAYS.map(day => {
             const cell = SCHEDULE[day]?.[slot];
             return cell ? (
+          
               <div key={day} className={`rounded-lg border-l-[3px] px-2 py-1.5 ${cell.tw} hover:scale-[1.03] transition-transform duration-200 cursor-default`}>
                 <div className="text-[10px] font-bold leading-tight truncate">{cell.label}</div>
                 <div className="text-[9px] opacity-60 mt-0.5">{cell.room}</div>
@@ -253,10 +255,13 @@ function FeatureCard({ icon, title, desc, color, glow, ring, link, delay }) {
 
   return (
     <Reveal delay={delay}>
-      {link
-        ? <Link to={link} className="block" id="feature-analytics-link">{cardContent}</Link>
-        : cardContent
-      }
+      {link ? (
+        <Link to={link} className="block" id="feature-classroom-link">
+          {cardContent}
+        </Link>
+      ) : (
+        cardContent
+      )}
     </Reveal>
   );
 }

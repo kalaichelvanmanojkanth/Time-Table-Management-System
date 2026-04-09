@@ -1,34 +1,30 @@
-import { useEffect, useState } from 'react';
-import {
-  Navigate,
-  NavLink,
-  Route,
-  Routes,
-  useLocation,
-} from 'react-router-dom';
-import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-import Navbar from './components/Navbar';
-import Footer from './components/Footer';
-import ProtectedRoute from './components/ProtectedRoute';
-import ClassroomManagementPage from './pages/ClassroomManagementPage';
-import CreateProduct from './pages/CreateProduct';
-import CreateTimeTable from './pages/CreateTimeTable';
-import Dashboard from './pages/Dashboard';
-import EditProduct from './pages/EditProduct';
-import EditTimeTable from './pages/EditTimeTable';
-import Home from './pages/Home';
-import Login from './pages/Login';
-import ProductList from './pages/ProductList';
-import Register from './pages/Register';
-import TimeTableDashboard from './pages/TimeTableDashboard';
-import UserClassroomPage from './pages/UserClassroomPage';
-import ViewTimeTable from './pages/ViewTimeTable';
-import Analytics from './pages/analytics/Analytics';
-import Reports from './pages/analytics/Reports';
-import ResourceUtilization from './pages/analytics/ResourceUtilization';
-import SubjectDistribution from './pages/analytics/SubjectDistribution';
-import TeacherWorkload from './pages/analytics/TeacherWorkload';
+import React, { useState, useEffect } from "react";
+import { Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+
+import Navbar from "./components/Navbar";
+import Footer from "./components/Footer";
+import ProtectedRoute from "./components/ProtectedRoute";
+
+import ClassroomManagementPage from "./pages/ClassroomManagementPage";
+import CreateProduct from "./pages/CreateProduct";
+import CreateTimeTable from "./pages/CreateTimeTable";
+import Dashboard from "./pages/Dashboard";
+import EditProduct from "./pages/EditProduct";
+import EditTimeTable from "./pages/EditTimeTable";
+import Home from "./pages/Home";
+import Login from "./pages/Login";
+import ProductList from "./pages/ProductList";
+import Register from "./pages/Register";
+import TimeTableDashboard from "./pages/TimeTableDashboard";
+import UserClassroomPage from "./pages/UserClassroomPage";
+import ViewTimeTable from "./pages/ViewTimeTable";
+import Analytics from "./pages/analytics/Analytics";
+import Reports from "./pages/analytics/Reports";
+import ResourceUtilization from "./pages/analytics/ResourceUtilization";
+import SubjectDistribution from "./pages/analytics/SubjectDistribution";
+import TeacherWorkload from "./pages/analytics/TeacherWorkload";
 
 const ADMIN_PASSWORD = '1234';
 const ADMIN_AUTH_KEY = 'utm_admin_auth';

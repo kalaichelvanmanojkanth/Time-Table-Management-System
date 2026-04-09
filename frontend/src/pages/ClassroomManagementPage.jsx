@@ -1,16 +1,11 @@
-import { useEffect, useState, useDeferredValue, startTransition } from "react";
-import ClassroomFilters from "../components/ClassroomFilters";
-import ClassroomForm from "../components/ClassroomForm";
-import ClassroomTable from "../components/ClassroomTable";
-import ClassroomBot from "../components/ClassroomBot";
-import campusIllustration from "../assets/campus-illustration.svg";
-import equipmentIllustration from "../assets/equipment-illustration.svg";
-import {
-  createClassroom,
-  deleteClassroom,
-  getClassrooms,
-  updateClassroom,
-} from "../services/classroomApi";
+import { useEffect, useState, useDeferredValue, startTransition } from 'react';
+import ClassroomFilters from '../components/ClassroomFilters';
+import ClassroomForm from '../components/ClassroomForm';
+import ClassroomTable from '../components/ClassroomTable';
+import ClassroomBot from '../components/ClassroomBot';
+import campusIllustration from '../assets/campus-illustration.svg';
+import equipmentIllustration from '../assets/equipment-illustration.svg';
+import { createClassroom, deleteClassroom, getClassrooms, updateClassroom } from '../services/classroomApi';
 
 const initialFilters = {
   building: "",
@@ -29,25 +24,25 @@ function ClassroomManagementPage() {
   const [activeClassroom, setActiveClassroom] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState("");
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [deletingId, setDeletingId] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
 
   const loadClassrooms = async (currentFilters = deferredFilters) => {
     try {
       setLoading(true);
-      setError("");
+      setError('');
       const payload = await getClassrooms({
         ...currentFilters,
-        availableOnly: currentFilters.availableOnly ? "true" : "",
+        availableOnly: currentFilters.availableOnly ? 'true' : '',
       });
 
       startTransition(() => {
         setClassrooms(payload.data);
         setStats({
           total: payload.total,
-          available: payload.data.filter((item) => item.status === "available").length,
-          labs: payload.data.filter((item) => item.type === "lab").length,
+          available: payload.data.filter((item) => item.status === 'available').length,
+          labs: payload.data.filter((item) => item.type === 'lab').length,
         });
       });
     } catch (loadError) {
@@ -59,13 +54,14 @@ function ClassroomManagementPage() {
 
   useEffect(() => {
     loadClassrooms();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deferredFilters]);
 
   const handleFilterChange = (event) => {
     const { name, value, type, checked } = event.target;
     setFilters((current) => ({
       ...current,
-      [name]: type === "checkbox" ? checked : value,
+      [name]: type === 'checkbox' ? checked : value,
     }));
   };
 
@@ -76,15 +72,15 @@ function ClassroomManagementPage() {
   const handleSubmit = async (payload) => {
     try {
       setSaving(true);
-      setError("");
-      setMessage("");
+      setError('');
+      setMessage('');
 
       if (activeClassroom?._id) {
         await updateClassroom(activeClassroom._id, payload);
-        setMessage("Classroom updated successfully.");
+        setMessage('Classroom updated successfully.');
       } else {
         await createClassroom(payload);
-        setMessage("Classroom created successfully.");
+        setMessage('Classroom created successfully.');
       }
 
       setActiveClassroom(null);
@@ -99,26 +95,24 @@ function ClassroomManagementPage() {
   const handleDelete = async (classroom) => {
     const shouldDelete = window.confirm(`Delete ${classroom.roomName} from ${classroom.building}?`);
 
-    if (!shouldDelete) {
-      return;
-    }
+    if (!shouldDelete) return;
 
     try {
       setDeletingId(classroom._id);
-      setError("");
-      setMessage("");
+      setError('');
+      setMessage('');
       await deleteClassroom(classroom._id);
-      setMessage("Classroom deleted successfully.");
-      if (activeClassroom?._id === classroom._id) {
-        setActiveClassroom(null);
-      }
+      setMessage('Classroom deleted successfully.');
+      if (activeClassroom?._id === classroom._id) setActiveClassroom(null);
       await loadClassrooms(filters);
     } catch (deleteError) {
       setError(deleteError.message);
     } finally {
-      setDeletingId("");
+      setDeletingId('');
     }
   };
+
+  
 
   return (
     <main className="classroom-page">
@@ -153,20 +147,17 @@ function ClassroomManagementPage() {
       {error ? <div className="feedback error">{error}</div> : null}
 
       <section className="workspace-grid">
+        
         <div className="left-rail">
           <aside className="panel visual-panel">
             <p className="eyebrow">Resources snapshot</p>
             <h2>Labs and equipment view</h2>
-            <img
-              alt="Classroom resources and equipment"
-              className="equipment-image"
-              src={equipmentIllustration}
-            />
+            <img alt="Classroom resources and equipment" className="equipment-image" src={equipmentIllustration} />
           </aside>
 
           <ClassroomForm
             activeClassroom={activeClassroom}
-            key={activeClassroom?._id || "new"}
+            key={activeClassroom?._id || 'new'}
             onCancel={() => setActiveClassroom(null)}
             onSubmit={handleSubmit}
             saving={saving}
@@ -174,21 +165,12 @@ function ClassroomManagementPage() {
         </div>
 
         <div className="content-rail">
-          <ClassroomFilters
-            filters={filters}
-            onChange={handleFilterChange}
-            onReset={handleResetFilters}
-          />
+          <ClassroomFilters filters={filters} onChange={handleFilterChange} onReset={handleResetFilters} />
 
           {loading ? (
             <section className="panel loading-panel">Loading classrooms...</section>
           ) : (
-            <ClassroomTable
-              classrooms={classrooms}
-              deletingId={deletingId}
-              onDelete={handleDelete}
-              onEdit={setActiveClassroom}
-            />
+            <ClassroomTable classrooms={classrooms} deletingId={deletingId} onDelete={handleDelete} onEdit={setActiveClassroom} />
           )}
         </div>
       </section>
