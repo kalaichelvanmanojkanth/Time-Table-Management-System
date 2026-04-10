@@ -1,136 +1,129 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FaArrowLeft, FaChartBar, FaUserTie, FaBookOpen, FaDoorOpen, FaFileAlt, FaArrowRight } from 'react-icons/fa';
+import {
+  FaArrowLeft, FaChartBar, FaUserTie, FaBookOpen, FaDoorOpen,
+  FaFileAlt, FaArrowRight, FaSpinner,
+} from 'react-icons/fa';
 import { HiSparkles } from 'react-icons/hi2';
+/* DEMO MODE: no backend required */
 
-const CARDS = [
-  {
-    id: 'teacher-workload',
-    to: '/analytics/teacher-workload',
-    icon: <FaUserTie />,
-    title: 'Teacher Workload',
-    desc: 'Monitor teaching hours, detect overloaded faculty, and get AI-powered rebalancing suggestions.',
-    color: 'from-blue-600 to-primary',
-    glow: 'hover:shadow-[0_0_30px_rgba(30,58,138,0.2)]',
-    badge: '6 Faculty',
-    badgeCls: 'bg-blue-50 dark:bg-blue-950/60 text-primary dark:text-blue-400 border-blue-100 dark:border-blue-900',
-  },
-  {
-    id: 'subject-distribution',
-    to: '/analytics/subject-distribution',
-    icon: <FaBookOpen />,
-    title: 'Subject Distribution',
-    desc: 'Analyse subject hours, department allocations, and detect over- or under-allocated courses.',
-    color: 'from-secondary to-violet-700',
-    glow: 'hover:shadow-[0_0_30px_rgba(99,102,241,0.2)]',
-    badge: '12 Subjects',
-    badgeCls: 'bg-indigo-50 dark:bg-indigo-950/60 text-secondary dark:text-indigo-400 border-indigo-100 dark:border-indigo-900',
-  },
-  {
-    id: 'resource-utilization',
-    to: '/analytics/resource-utilization',
-    icon: <FaDoorOpen />,
-    title: 'Resource Utilization',
-    desc: 'Track classroom usage, lab occupancy, free vs occupied rooms, and peak-hour analysis.',
-    color: 'from-emerald-500 to-teal-600',
-    glow: 'hover:shadow-[0_0_30px_rgba(16,185,129,0.2)]',
-    badge: '18 Rooms',
-    badgeCls: 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900',
-  },
-  {
-    id: 'reports',
-    to: '/analytics/reports',
-    icon: <FaFileAlt />,
-    title: 'Reports & Insights',
-    desc: 'Generate workload, subject, and resource reports. Export to PDF or Excel with one click.',
-    color: 'from-amber-500 to-orange-500',
-    glow: 'hover:shadow-[0_0_30px_rgba(245,158,11,0.2)]',
-    badge: 'Export Ready',
-    badgeCls: 'bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-900',
-  },
-];
-
-const QUICK_STATS = [
-  { label: 'Faculty Members', value: '6', color: 'text-primary dark:text-blue-400' },
-  { label: 'Active Subjects', value: '12', color: 'text-secondary dark:text-indigo-400' },
-  { label: 'Rooms Tracked', value: '18', color: 'text-emerald-500' },
-  { label: 'Reports Generated', value: '34', color: 'text-amber-500' },
+const QUICK_LINKS = [
+  { to: '/analytics/teacher-workload',    label: 'Teacher Workload',    icon: <FaUserTie />,  color: 'from-blue-600 to-primary',        badge: 'bg-blue-50 text-primary border-blue-100' },
+  { to: '/analytics/subject-distribution',label: 'Subject Distribution',icon: <FaBookOpen />, color: 'from-secondary to-violet-700',    badge: 'bg-indigo-50 text-secondary border-indigo-100' },
+  { to: '/analytics/resource-utilization',label: 'Resource Utilization',icon: <FaDoorOpen />, color: 'from-emerald-500 to-teal-600',   badge: 'bg-emerald-50 text-emerald-600 border-emerald-100' },
+  { to: '/analytics/reports',             label: 'Reports & Insights',  icon: <FaFileAlt />,  color: 'from-amber-500 to-orange-500',    badge: 'bg-amber-50 text-amber-600 border-amber-100' },
 ];
 
 export default function Analytics() {
-  return (
-    <div className="min-h-screen bg-surface dark:bg-navy font-sans text-navy dark:text-slate-100 antialiased">
+  // DEMO MODE: static dummy counts — no backend required
+  const [stats]   = useState({ teachers: 7, subjects: 10, rooms: 6, timetable: 42 });
+  const [loading] = useState(false);
 
-      {/* ── Top bar ── */}
-      <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 px-5 sm:px-8 py-4 flex items-center gap-3 sticky top-0 z-40 shadow-sm">
-        <Link to="/" id="analytics-back-home" className="inline-flex items-center gap-2 text-sm font-semibold text-muted dark:text-slate-400 hover:text-primary dark:hover:text-blue-400 transition-colors">
+  const KPI = [
+    { label: 'Registered Teachers', value: stats.teachers, color: 'text-primary'     },
+    { label: 'Registered Subjects', value: stats.subjects, color: 'text-secondary'   },
+    { label: 'Registered Rooms',    value: stats.rooms,    color: 'text-emerald-500'  },
+    { label: 'Timetable Entries',   value: stats.timetable,color: 'text-amber-500'   },
+  ];
+
+  return (
+    <div className="min-h-screen bg-surface font-sans text-navy antialiased">
+
+      {/* header */}
+      <header className="bg-white border-b border-slate-100 px-5 sm:px-8 py-4 flex items-center gap-3 sticky top-0 z-40 shadow-sm">
+        <Link to="/" id="analytics-back-home" className="inline-flex items-center gap-2 text-sm font-semibold text-muted hover:text-primary transition-colors">
           <FaArrowLeft className="text-xs" /> Home
         </Link>
-        <span className="text-slate-300 dark:text-slate-700">/</span>
-        <span className="text-sm font-semibold text-navy dark:text-slate-200">Academic Analytics</span>
+        <span className="text-slate-300">/</span>
+        <span className="text-sm font-semibold text-navy">Academic Analytics</span>
         <div className="ml-auto">
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-widest uppercase text-primary dark:text-accent bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900 rounded-full px-3 py-1">
-            <HiSparkles className="text-accent" /> Workload Intelligence
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-widest uppercase text-primary bg-blue-50 border border-blue-100 rounded-full px-3 py-1">
+            <HiSparkles /> Analytics
           </span>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-5 sm:px-8 py-10">
+      <main className="max-w-7xl mx-auto px-5 sm:px-8 py-10 space-y-10">
 
-        {/* ── Heading ── */}
-        <div className="mb-10">
-          <div className="inline-flex items-center gap-2 text-[11px] font-bold tracking-widest uppercase text-primary dark:text-accent bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900 rounded-full px-3 py-1 mb-4">
-            <HiSparkles /> Academic Analytics & Workload Intelligence
+        {/* heading */}
+        <div>
+          <div className="inline-flex items-center gap-2 text-[11px] font-bold tracking-widest uppercase text-primary bg-blue-50 border border-blue-100 rounded-full px-3 py-1 mb-4">
+            <HiSparkles /> Academic Analytics &amp; Workload Intelligence
           </div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-navy dark:text-white leading-tight mb-3">
-            Analytics{' '}
-            <span className="bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
-              Dashboard
-            </span>
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-navy leading-tight mb-3">
+            Analytics <span className="bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">Hub</span>
           </h1>
-          <p className="text-muted dark:text-slate-400 text-lg max-w-2xl">
-            Deep-dive into faculty workloads, subject allocations, resource usage, and generate comprehensive institutional reports.
+          <p className="text-muted text-lg max-w-2xl">
+            Real-time analytics powered by live timetable data — teachers, subjects, rooms, and scheduling entries updated continuously.
           </p>
         </div>
 
-        {/* ── Quick stats strip ── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
-          {QUICK_STATS.map(s => (
-            <div key={s.label} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-md p-5 text-center hover:shadow-lg transition-shadow">
-              <div className={`text-3xl font-extrabold ${s.color} mb-1`}>{s.value}</div>
-              <div className="text-xs font-semibold text-muted dark:text-slate-400">{s.label}</div>
+
+        {/* KPI strip */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {KPI.map(s => (
+            <div key={s.label} className="bg-white rounded-2xl border border-slate-100 shadow-md p-5 text-center hover:shadow-lg transition-shadow">
+              {loading
+                ? <div className="flex justify-center mb-1"><FaSpinner className="animate-spin text-slate-300 text-2xl" /></div>
+                : <div className={`text-3xl font-extrabold ${s.color} mb-1`}>{s.value}</div>
+              }
+              <div className="text-xs font-semibold text-muted">{s.label}</div>
             </div>
           ))}
         </div>
 
-        {/* ── 4 Navigation Cards ── */}
-        <div className="grid sm:grid-cols-2 gap-6">
-          {CARDS.map(c => (
-            <Link
-              key={c.id}
-              to={c.to}
-              id={`analytics-card-${c.id}`}
-              className={`group relative bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-md hover:-translate-y-1.5 hover:shadow-xl transition-all duration-300 p-7 flex flex-col ${c.glow}`}
-            >
-              {/* Hover gradient overlay */}
-              <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-white dark:from-slate-800 to-blue-50/40 dark:to-blue-950/20 pointer-events-none" />
+        {/* Featured: Open Dashboard CTA */}
+        <Link to="/analytics/dashboard" id="analytics-card-dashboard"
+          className="group relative flex flex-col sm:flex-row items-center gap-6 bg-gradient-to-br from-slate-800 to-slate-950 rounded-3xl p-8 shadow-2xl hover:shadow-[0_0_40px_rgba(30,41,59,0.3)] hover:-translate-y-1 transition-all duration-300 overflow-hidden">
+          {/* glow blob */}
+          <div className="absolute -right-12 -top-12 w-48 h-48 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
+          <div className="absolute -left-8 -bottom-8 w-40 h-40 rounded-full bg-indigo-500/10 blur-2xl pointer-events-none" />
 
-              <div className="relative flex items-start justify-between mb-5">
-                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${c.color} text-white flex items-center justify-center text-2xl shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                  {c.icon}
+          <div className="relative w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-accent text-white flex items-center justify-center text-3xl shadow-xl flex-shrink-0 group-hover:scale-110 transition-transform duration-300">
+            <FaChartBar />
+          </div>
+
+          <div className="relative flex-1 text-center sm:text-left">
+            <div className="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-widest uppercase text-blue-300 bg-white/10 border border-white/20 rounded-full px-2.5 py-0.5 mb-2">
+              <HiSparkles /> Full Dashboard
+            </div>
+            <h2 className="text-2xl font-extrabold text-white mb-1">Analytics Overview Dashboard</h2>
+            <p className="text-slate-400 text-sm leading-relaxed max-w-lg">
+              All analytics in one place — teacher workload, subject distribution, room utilisation, filters, AI insights, and CRUD actions.
+            </p>
+          </div>
+
+          <div className="relative inline-flex items-center gap-2 text-sm font-bold text-white bg-white/10 hover:bg-white/20 border border-white/20 px-5 py-2.5 rounded-xl transition-all flex-shrink-0">
+            Open Dashboard <FaArrowRight className="text-xs group-hover:translate-x-1 transition-transform" />
+          </div>
+        </Link>
+
+
+        {/* Compact quick-links */}
+        <div>
+          <p className="text-xs font-bold text-muted uppercase tracking-widest mb-4">Detailed Analytics Pages</p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {QUICK_LINKS.map(l => (
+              <Link key={l.to} to={l.to} id={`analytics-link-${l.to.split('/').pop()}`}
+                className="group bg-white border border-slate-100 rounded-2xl p-5 hover:shadow-lg hover:-translate-y-1 transition-all duration-200 flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${l.color} text-white flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
+                  {l.icon}
                 </div>
-                <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${c.badgeCls}`}>{c.badge}</span>
-              </div>
-
-              <h2 className="relative font-extrabold text-navy dark:text-slate-100 text-xl mb-2">{c.title}</h2>
-              <p className="relative text-muted dark:text-slate-400 text-sm leading-relaxed flex-1">{c.desc}</p>
-
-              <div className="relative mt-5 flex items-center gap-1.5 text-sm font-bold text-primary dark:text-blue-400 group-hover:gap-2.5 transition-all duration-200">
-                View {c.title} <FaArrowRight className="text-xs" />
-              </div>
-            </Link>
-          ))}
+                <div>
+                  <span className="font-bold text-sm text-navy group-hover:text-primary transition-colors block">{l.label}</span>
+                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${l.badge} mt-0.5 inline-block`}>Live</span>
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
+
       </main>
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 0.8s linear infinite; }
+      `}</style>
     </div>
   );
 }

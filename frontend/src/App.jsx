@@ -14,15 +14,19 @@ import ProductList from './pages/ProductList';
 import CreateProduct from './pages/CreateProduct';
 import EditProduct from './pages/EditProduct';
 import Analytics from './pages/analytics/Analytics';
+import AnalyticsDashboard from './pages/analytics/AnalyticsDashboard';
 import TeacherWorkload from './pages/analytics/TeacherWorkload';
 import SubjectDistribution from './pages/analytics/SubjectDistribution';
 import ResourceUtilization from './pages/analytics/ResourceUtilization';
 import Reports from './pages/analytics/Reports';
+import AISchedulingSetup from './pages/AISchedulingSetup';
+import ConflictDetection from './pages/ConflictDetection';
+import OptimizationSuggestions from './pages/OptimizationSuggestions';
 
 /* Hide the legacy Navbar on the homepage — Home.jsx has its own premium navbar */
 function AppShell() {
   const { pathname } = useLocation();
-  const showNavbar = pathname !== '/' && !pathname.startsWith('/analytics');
+  const showNavbar = pathname !== '/' && !pathname.startsWith('/analytics') && !pathname.startsWith('/ai');
 
   return (
     <div className="app">
@@ -64,10 +68,14 @@ function AppShell() {
             }
           />
           <Route path="/analytics" element={<Analytics />} />
+          <Route path="/analytics/dashboard" element={<AnalyticsDashboard />} />
           <Route path="/analytics/teacher-workload" element={<TeacherWorkload />} />
           <Route path="/analytics/subject-distribution" element={<SubjectDistribution />} />
           <Route path="/analytics/resource-utilization" element={<ResourceUtilization />} />
           <Route path="/analytics/reports" element={<Reports />} />
+          <Route path="/ai/setup" element={<AISchedulingSetup />} />
+          <Route path="/ai/conflict-detection" element={<ConflictDetection />} />
+          <Route path="/ai/optimization" element={<OptimizationSuggestions />} />
         </Routes>
       </main>
       <ToastContainer position="bottom-right" autoClose={3000} />

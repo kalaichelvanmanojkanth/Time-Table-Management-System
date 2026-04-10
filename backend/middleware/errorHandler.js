@@ -1,5 +1,7 @@
 // Global error handler middleware
 const errorHandler = (err, req, res, next) => {
+  // Always enforce UTF-8 encoding on error responses
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
   let error = { ...err };
   error.message = err.message;
 
