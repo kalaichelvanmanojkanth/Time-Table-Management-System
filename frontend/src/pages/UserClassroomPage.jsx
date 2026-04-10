@@ -72,6 +72,91 @@ function UserClassroomPage() {
 
   const handleCloseDetails = () => setSelectedRoom(null);
 
+  // Normalize building names to the four canonical labels
+  const normalizeBuilding = (raw) => {
+    if (!raw) return null;
+    const s = String(raw).trim().toLowerCase();
+    if (s === "engineering" || s === "engineering building") return "Engineering Building";
+    if (s === "business" || s === "business building") return "Business Building";
+    if (s === "new building") return "New Building";
+    if (s === "main building") return "Main Building";
+    // If a value contains one of the keywords, prefer mapped name
+    if (s.includes("engineering")) return "Engineering Building";
+    if (s.includes("business")) return "Business Building";
+    if (s.includes("new building") || s.includes("new")) return "New Building";
+    if (s.includes("main")) return "Main Building";
+    return null;
+  };
+
+  // Combine available rooms + maintenance rooms for a complete count
+  const allRooms = [...classrooms, ...(maintenanceRooms || [])];
+
+  const buildingCounts = {
+    "Engineering Building": 0,
+    "Business Building": 0,
+    "New Building": 0,
+    "Main Building": 0,
+  };
+
+  allRooms.forEach((r) => {
+    const b = normalizeBuilding(r && r.building);
+    if (b && Object.prototype.hasOwnProperty.call(buildingCounts, b)) {
+      buildingCounts[b] += 1;
+    }
+  });
+
+  const chartData = [
+    { key: "Engineering Building", value: buildingCounts["Engineering Building"], color: "#60a5fa" },
+    { key: "Business Building", value: buildingCounts["Business Building"], color: "#f59e0b" },
+    { key: "New Building", value: buildingCounts["New Building"], color: "#34d399" },
+    { key: "Main Building", value: buildingCounts["Main Building"], color: "#a78bfa" },
+  ];
+
+  const totalRoomsForChart = chartData.reduce((s, c) => s + c.value, 0);
+
+  // Small inline PieChart using SVG (no new deps). It's responsive via viewBox.
+  const PieChart = ({ data, size = 120 }) => {
+    const radius = size / 2;
+    // stroke width controls donut thickness
+    const strokeWidth = Math.max(10, Math.floor(radius * 0.5));
+    const innerR = radius - strokeWidth / 2;
+    const circumference = 2 * Math.PI * innerR;
+    let offset = 0;
+    const slices = data.map((d) => {
+      const portion = totalRoomsForChart === 0 ? 1 / data.length : d.value / totalRoomsForChart;
+      const dash = portion * circumference;
+      const slice = { ...d, dash, offset };
+      offset += dash;
+      return slice;
+    });
+
+    return (
+      <svg width="100%" viewBox={`0 0 ${size} ${size}`} aria-hidden>
+        <g transform={`translate(${radius},${radius})`}>
+          {slices.map((sli, i) => (
+            <circle
+              key={sli.key}
+              r={innerR}
+              cx={0}
+              cy={0}
+              fill="transparent"
+              stroke={sli.color}
+              strokeWidth={strokeWidth}
+              strokeDasharray={`${sli.dash} ${Math.max(0, circumference - sli.dash)}`}
+              strokeDashoffset={-sli.offset}
+              strokeLinecap="round"
+              style={{ transition: "stroke-dasharray 300ms, stroke 300ms, stroke 300ms" }}
+            />
+          ))}
+          {/* center label */}
+          <text x={0} y={4} textAnchor="middle" fontSize={13} fontWeight={600} fill="#111827">
+            {totalRoomsForChart} Rooms
+          </text>
+        </g>
+      </svg>
+    );
+  };
+
   return (
     <main className="classroom-page">
       <section className="hero-card">
@@ -107,6 +192,28 @@ function UserClassroomPage() {
 
             <div className="flex items-center gap-2">
               {/* No date/time filter in stable version - keep filters compact */}
+
+              <div className="panel max-w-xs w-64 sm:w-72">
+                <h3 className="text-sm font-semibold mb-2">Rooms by Building</h3>
+                <div className="flex items-center gap-3">
+                  <div style={{ width: 96, height: 96 }} className="shrink-0">
+                    <PieChart data={chartData} size={96} />
+                  </div>
+                  <div className="flex-1 text-sm">
+                    {chartData.map((d) => (
+                      <div key={d.key} className="mb-1">
+                        <div className="flex items-center justify-between text-[13px] leading-5">
+                          <div className="flex items-center gap-2 truncate">
+                            <span style={{ width: 10, height: 10, background: d.color, display: 'inline-block', borderRadius: 2 }} />
+                            <span className="text-slate-700 truncate">{d.key}</span>
+                          </div>
+                          <div className="text-slate-600 pl-3">— {d.value}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
