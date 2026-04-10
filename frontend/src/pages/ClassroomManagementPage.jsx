@@ -3,7 +3,6 @@ import ClassroomFilters from '../components/ClassroomFilters';
 import ClassroomForm from '../components/ClassroomForm';
 import ClassroomTable from '../components/ClassroomTable';
 import ClassroomBot from '../components/ClassroomBot';
-import campusIllustration from '../assets/campus-illustration.svg';
 import equipmentIllustration from '../assets/equipment-illustration.svg';
 import { createClassroom, deleteClassroom, getClassrooms, updateClassroom } from '../services/classroomApi';
 
@@ -115,28 +114,25 @@ function ClassroomManagementPage() {
   
 
   return (
-    <main className="classroom-page">
-      <section className="hero-card">
-        <div>
+    <main className="classroom-page admin-classroom-page">
+      <section className="hero-section admin-hero-section">
+        <div className="hero-left">
           <p className="eyebrow">University timetable management</p>
           <h1>Campus space operations dashboard</h1>
           <p className="hero-copy">
             Manage room inventory, monitor availability, and keep scheduling decisions grounded in live capacity and resource data.
           </p>
         </div>
-        <div className="stats-grid">
-          <div className="hero-image-wrap">
-            <img alt="University campus buildings" className="hero-image" src={campusIllustration} />
-          </div>
-          <article>
+        <div className="hero-right">
+          <article className="stat-card">
             <span>Visible rooms</span>
             <strong>{stats.total}</strong>
           </article>
-          <article>
+          <article className="stat-card">
             <span>Available visible</span>
             <strong>{stats.available}</strong>
           </article>
-          <article>
+          <article className="stat-card">
             <span>Labs</span>
             <strong>{stats.labs}</strong>
           </article>
@@ -146,7 +142,7 @@ function ClassroomManagementPage() {
       {message ? <div className="feedback success">{message}</div> : null}
       {error ? <div className="feedback error">{error}</div> : null}
 
-      <section className="workspace-grid">
+      <section className="workspace-grid admin-workspace-grid">
         
         <div className="left-rail">
           <aside className="panel visual-panel">

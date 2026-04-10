@@ -158,7 +158,7 @@ function UserClassroomPage() {
   };
 
   return (
-    <main className="classroom-page">
+    <main className="classroom-page user-classroom-page">
       <section className="hero-card">
         <div>
           <p className="eyebrow">User portal</p>
@@ -185,37 +185,31 @@ function UserClassroomPage() {
 
       {error ? <div className="feedback error">{error}</div> : null}
 
-      <section className="content-rail">
-        <div className="panel">
-          <div className="flex items-center justify-between mb-4">
-            <ClassroomFilters filters={filters} onChange={handleFilterChange} onReset={handleResetFilters} />
+      <section className="content-rail user-content-rail">
+        <div className="user-toolbar">
+          <ClassroomFilters filters={filters} onChange={handleFilterChange} onReset={handleResetFilters} />
 
-            <div className="flex items-center gap-2">
-              {/* No date/time filter in stable version - keep filters compact */}
-
-              <div className="panel max-w-xs w-64 sm:w-72">
-                <h3 className="text-sm font-semibold mb-2">Rooms by Building</h3>
-                <div className="flex items-center gap-3">
-                  <div style={{ width: 96, height: 96 }} className="shrink-0">
-                    <PieChart data={chartData} size={96} />
-                  </div>
-                  <div className="flex-1 text-sm">
-                    {chartData.map((d) => (
-                      <div key={d.key} className="mb-1">
-                        <div className="flex items-center justify-between text-[13px] leading-5">
-                          <div className="flex items-center gap-2 truncate">
-                            <span style={{ width: 10, height: 10, background: d.color, display: 'inline-block', borderRadius: 2 }} />
-                            <span className="text-slate-700 truncate">{d.key}</span>
-                          </div>
-                          <div className="text-slate-600 pl-3">— {d.value}</div>
-                        </div>
+          <aside className="panel chart-panel">
+            <h3 className="chart-title">Rooms by Building</h3>
+            <div className="chart-layout">
+              <div style={{ width: 96, height: 96 }} className="shrink-0">
+                <PieChart data={chartData} size={96} />
+              </div>
+              <div className="flex-1 text-sm">
+                {chartData.map((d) => (
+                  <div key={d.key} className="mb-1">
+                    <div className="flex items-center justify-between text-[13px] leading-5">
+                      <div className="flex items-center gap-2 truncate">
+                        <span style={{ width: 10, height: 10, background: d.color, display: 'inline-block', borderRadius: 2 }} />
+                        <span className="text-slate-700 truncate">{d.key}</span>
                       </div>
-                    ))}
+                      <div className="text-slate-600 pl-3">— {d.value}</div>
+                    </div>
                   </div>
-                </div>
+                ))}
               </div>
             </div>
-          </div>
+          </aside>
         </div>
 
         {loading ? (
