@@ -28,6 +28,7 @@ const resourceKeyMap = {
 const CreateTimeTable = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [resettingAll, setResettingAll] = useState(false);
   const [resources, setResources] = useState({
     courses: [],
     lecturers: [],
@@ -90,9 +91,82 @@ const CreateTimeTable = () => {
   };
 
   const handleSubmit = async (formData) => {
-    await timetableApi.timetables.create(formData);
+    const response = await timetableApi.timetables.create(formData);
+    const createdEntry = response?.data;
+
+    if (createdEntry?._id) {
+      setEntries((previousEntries) => [createdEntry, ...previousEntries]);
+    }
+
     toast.success('Timetable entry created successfully.');
-    navigate(`/timetable/view?week=${encodeURIComponent(formData.week)}`);
+    navigate(`/timetable/view?week=${encodeURIComponent(formData.week)}`, {
+      state: { createdEntry },
+    });
+  };
+
+  const handleRefreshData = async () => {
+    await loadFormDependencies();
+    toast.success('Scheduled entries and resources refreshed.');
+  };
+
+  const handleResetAllData = async () => {
+    const confirmed = window.confirm(
+      'Reset all data? This will permanently delete all schedules, courses, lecturers, rooms, and timeslots.'
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setResettingAll(true);
+
+    try {
+      const [timetableEntries, courses, lecturers, rooms, timeslots] =
+        await Promise.all([
+          timetableApi.timetables.list(),
+          timetableApi.courses.getAll(),
+          timetableApi.lecturers.getAll(),
+          timetableApi.rooms.getAll(),
+          timetableApi.timeslots.getAll(),
+        ]);
+
+      await Promise.all(
+        timetableEntries.data.map((entry) =>
+          timetableApi.timetables.delete(entry._id)
+        )
+      );
+
+      await Promise.all(
+        timeslots.data.map((slot) => timetableApi.timeslots.delete(slot._id))
+      );
+      await Promise.all(
+        rooms.data.map((room) => timetableApi.rooms.delete(room._id))
+      );
+      await Promise.all(
+        lecturers.data.map((lecturer) =>
+          timetableApi.lecturers.delete(lecturer._id)
+        )
+      );
+      await Promise.all(
+        courses.data.map((course) => timetableApi.courses.delete(course._id))
+      );
+
+      setEntries([]);
+      setResources({
+        courses: [],
+        lecturers: [],
+        rooms: [],
+        timeslots: [],
+      });
+
+      toast.success('All schedules and timetable resources were reset.');
+    } catch (error) {
+      toast.error(
+        getApiErrorMessage(error, 'Failed to reset all timetable data.')
+      );
+    } finally {
+      setResettingAll(false);
+    }
   };
 
   if (loading) {
@@ -109,6 +183,9 @@ const CreateTimeTable = () => {
         existingEntries={entries}
         onSubmit={handleSubmit}
         onCreateResource={handleResourceCreate}
+        onRefreshData={handleRefreshData}
+        onResetAllData={handleResetAllData}
+        resetAllLoading={resettingAll}
       />
     </TimeTableLayout>
   );

@@ -1,4 +1,10 @@
-require('dotenv').config();
+const path = require('path');
+
+require('dotenv').config({
+  // Load the backend env file reliably even when the server is started
+  // from the repository root via npm scripts.
+  path: path.join(__dirname, '.env'),
+});
 
 const app = require('./app');
 const connectDB = require('./config/db');

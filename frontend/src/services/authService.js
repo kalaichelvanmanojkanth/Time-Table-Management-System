@@ -19,6 +19,20 @@ const authService = {
     return response.data;
   },
 
+  // Start forgot password flow
+  forgotPassword: async (email) => {
+    const response = await api.post('/auth/forgot-password', { email });
+    return response.data;
+  },
+
+  // Reset password using token
+  resetPassword: async (token, password) => {
+    const response = await api.post(`/auth/reset-password/${token}`, {
+      password,
+    });
+    return response.data;
+  },
+
   // Logout user
   logout: () => {
     localStorage.removeItem('user');

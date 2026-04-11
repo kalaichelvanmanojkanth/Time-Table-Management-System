@@ -9,17 +9,49 @@ const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
 
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  'http://localhost:5176',
-  'http://127.0.0.1:5176',
-];
+const parseAllowedOrigins = () => {
+  const configuredOrigins = process.env.CORS_ALLOWED_ORIGINS;
+  if (!configuredOrigins) {
+    return [];
+  }
+
+  return configuredOrigins
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+};
+
+const allowedOrigins = parseAllowedOrigins();
+
+const isAllowedDevOrigin = (origin) => {
+  try {
+    const { hostname, protocol } = new URL(origin);
+    const isHttp = protocol === 'http:' || protocol === 'https:';
+    const isLocalHost =
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '0.0.0.0';
+    const isPrivateNetworkHost =
+      /^10\.\d+\.\d+\.\d+$/.test(hostname) ||
+      /^192\.168\.\d+\.\d+$/.test(hostname) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(hostname);
+
+    return isHttp && (isLocalHost || isPrivateNetworkHost);
+  } catch (error) {
+    return false;
+  }
+};
 
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (origin && allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      // Allow local frontend dev servers regardless of the exact Vite port.
+      if (!origin || isAllowedDevOrigin(origin)) {
         callback(null, true);
         return;
       }
@@ -27,6 +59,8 @@ app.use(
       callback(new Error('Not allowed by CORS'));
     },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    optionsSuccessStatus: 204,
   })
 );
 app.use(express.json());

@@ -11,8 +11,7 @@ const {
 } = require('./routeHelpers');
 
 const router = express.Router();
-
-router.use(protect);
+const protectedWrite = [protect];
 
 const roomValidation = [
   body('name')
@@ -80,6 +79,7 @@ router.get(
 
 router.post(
   '/',
+  protectedWrite,
   roomValidation,
   asyncHandler(async (req, res) => {
     if (handleValidationErrors(req, res)) {
@@ -98,7 +98,7 @@ router.post(
 
 router.put(
   '/:id',
-  [...idValidation, ...roomValidation],
+  [...protectedWrite, ...idValidation, ...roomValidation],
   asyncHandler(async (req, res) => {
     if (handleValidationErrors(req, res)) {
       return;
@@ -124,7 +124,7 @@ router.put(
 
 router.delete(
   '/:id',
-  idValidation,
+  [...protectedWrite, ...idValidation],
   asyncHandler(async (req, res) => {
     if (handleValidationErrors(req, res)) {
       return;

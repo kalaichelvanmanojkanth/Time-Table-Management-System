@@ -12,8 +12,7 @@ const {
 } = require('./routeHelpers');
 
 const router = express.Router();
-
-router.use(protect);
+const protectedWrite = [protect];
 
 const courseValidation = [
   body('name')
@@ -88,6 +87,7 @@ router.get(
 
 router.post(
   '/',
+  protectedWrite,
   courseValidation,
   asyncHandler(async (req, res) => {
     if (handleValidationErrors(req, res)) {
@@ -106,7 +106,7 @@ router.post(
 
 router.put(
   '/:id',
-  [...idValidation, ...courseValidation],
+  [...protectedWrite, ...idValidation, ...courseValidation],
   asyncHandler(async (req, res) => {
     if (handleValidationErrors(req, res)) {
       return;
@@ -132,7 +132,7 @@ router.put(
 
 router.delete(
   '/:id',
-  idValidation,
+  [...protectedWrite, ...idValidation],
   asyncHandler(async (req, res) => {
     if (handleValidationErrors(req, res)) {
       return;

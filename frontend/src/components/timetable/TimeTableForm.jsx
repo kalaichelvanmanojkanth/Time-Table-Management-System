@@ -26,14 +26,6 @@ const createDefaultForm = () => ({
   week: getCurrentWeekValue(),
 });
 
-const createBlankForm = () => ({
-  courseId: '',
-  lecturerId: '',
-  roomId: '',
-  timeslotId: '',
-  week: '',
-});
-
 const createFormState = (initialData = null) =>
   initialData
     ? {
@@ -78,6 +70,9 @@ const TimeTableForm = ({
   existingEntries = [],
   onSubmit,
   onCreateResource,
+  onRefreshData,
+  onResetAllData,
+  resetAllLoading = false,
   isEdit = false,
   loading = false,
 }) => {
@@ -87,6 +82,7 @@ const TimeTableForm = ({
   const [serverConflicts, setServerConflicts] = useState([]);
   const [activeModalType, setActiveModalType] = useState(null);
   const [formVersion, setFormVersion] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     setFormData(createFormState(initialData));
@@ -172,10 +168,26 @@ const TimeTableForm = ({
   };
 
   const handleResetForm = () => {
-    setFormData(isEdit ? createFormState(initialData) : createBlankForm());
+    setFormData(isEdit ? createFormState(initialData) : createDefaultForm());
     setFormIssues([]);
     setServerConflicts([]);
     setFormVersion((previousValue) => previousValue + 1);
+  };
+
+  const handleRefreshData = async () => {
+    if (!onRefreshData) {
+      return;
+    }
+
+    setRefreshing(true);
+    setFormIssues([]);
+    setServerConflicts([]);
+
+    try {
+      await onRefreshData();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   if (loading) {
@@ -366,8 +378,28 @@ const TimeTableForm = ({
               onClick={handleResetForm}
               disabled={submitting}
             >
-              {isEdit ? 'Reset Form' : 'Clear Form'}
+              {isEdit ? 'Reset Form' : 'Reset Entry'}
             </button>
+            {!isEdit && onRefreshData ? (
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={handleRefreshData}
+                disabled={submitting || refreshing}
+              >
+                {refreshing ? 'Refreshing...' : 'Refresh Scheduled Data'}
+              </button>
+            ) : null}
+            {!isEdit && onResetAllData ? (
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={onResetAllData}
+                disabled={submitting || refreshing || resetAllLoading}
+              >
+                {resetAllLoading ? 'Resetting All Data...' : 'Reset All Data'}
+              </button>
+            ) : null}
           </div>
         </form>
       </div>

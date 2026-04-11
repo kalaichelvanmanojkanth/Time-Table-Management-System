@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import { FaUser, FaEnvelope, FaLock, FaUserPlus } from 'react-icons/fa';
+import getApiErrorMessage from '../utils/getApiErrorMessage';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -43,10 +44,7 @@ const Register = () => {
       toast.success('Registration successful!');
       navigate('/timetable');
     } catch (error) {
-      toast.error(
-        error.response?.data?.message ||
-          'Registration failed. Please try again.'
-      );
+      toast.error(getApiErrorMessage(error, 'Registration failed. Please try again.'));
     } finally {
       setLoading(false);
     }

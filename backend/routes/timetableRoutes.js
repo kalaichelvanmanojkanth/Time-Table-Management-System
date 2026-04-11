@@ -24,8 +24,7 @@ const {
 } = require('./timetableHelpers');
 
 const router = express.Router();
-
-router.use(protect);
+const protectedWrite = [protect];
 
 const timetableValidation = [
   body('courseId', 'Course is required').isMongoId(),
@@ -99,6 +98,7 @@ router.get(
 
 router.delete(
   '/',
+  protectedWrite,
   [
     query('week')
       .notEmpty()
@@ -123,6 +123,7 @@ router.delete(
 
 router.post(
   '/clear',
+  protectedWrite,
   clearTimetableValidation,
   asyncHandler(async (req, res) => {
     if (handleValidationErrors(req, res)) {
@@ -140,6 +141,7 @@ router.post(
 
 router.delete(
   '/clear',
+  protectedWrite,
   [
     query('week')
       .notEmpty()
@@ -188,6 +190,7 @@ router.get(
 
 router.post(
   '/',
+  protectedWrite,
   timetableValidation,
   asyncHandler(async (req, res) => {
     if (handleValidationErrors(req, res)) {
@@ -246,7 +249,7 @@ router.post(
 
 router.put(
   '/:id',
-  [...idValidation, ...timetableValidation],
+  [...protectedWrite, ...idValidation, ...timetableValidation],
   asyncHandler(async (req, res) => {
     if (handleValidationErrors(req, res)) {
       return;
@@ -321,7 +324,7 @@ router.put(
 
 router.delete(
   '/:id',
-  idValidation,
+  [...protectedWrite, ...idValidation],
   asyncHandler(async (req, res) => {
     if (handleValidationErrors(req, res)) {
       return;
@@ -343,6 +346,7 @@ router.delete(
 
 router.post(
   '/generate',
+  protectedWrite,
   [body('week', 'Week must follow the YYYY-Www format').custom(validateWeekValue)],
   asyncHandler(async (req, res) => {
     if (handleValidationErrors(req, res)) {
