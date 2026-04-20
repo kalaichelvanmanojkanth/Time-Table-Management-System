@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import {
@@ -50,12 +51,13 @@ const TYPE_ICONS = {
 
 function SkeletonCard() {
   return (
-    <div className="border border-slate-100 dark:border-slate-700 rounded-xl p-4 flex items-start gap-3 animate-pulse">
-      <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700 flex-shrink-0" />
-      <div className="flex-1 space-y-2">
-        <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-2/3" />
-        <div className="h-2.5 bg-slate-100 dark:bg-slate-800 rounded w-full" />
-        <div className="h-2.5 bg-slate-100 dark:bg-slate-800 rounded w-4/5" />
+    <div className="relative border border-slate-100 dark:border-slate-700/60 rounded-2xl p-5 flex items-start gap-4 overflow-hidden bg-white/60 dark:bg-slate-800/60">
+      <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/30 dark:via-white/5 to-transparent" />
+      <div className="w-10 h-10 rounded-2xl bg-slate-200 dark:bg-slate-700 flex-shrink-0" />
+      <div className="flex-1 space-y-2.5">
+        <div className="h-3.5 bg-slate-200 dark:bg-slate-700 rounded-lg w-2/3" />
+        <div className="h-2.5 bg-slate-100 dark:bg-slate-800 rounded-lg w-full" />
+        <div className="h-2.5 bg-slate-100 dark:bg-slate-800 rounded-lg w-4/5" />
       </div>
     </div>
   );
@@ -65,40 +67,45 @@ function ConflictCard({ conflict, onResolve, resolving }) {
   const isResolving = resolving === (conflict.id || conflict.detail);
   const sev = conflict.severity || 'medium';
   return (
-    <div
-      className={`border-l-4 rounded-xl p-4 flex items-start gap-3 transition-all duration-300
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: isResolving ? 0 : 1, y: 0, scale: isResolving ? 0.95 : 1 }}
+      exit={{ opacity: 0, x: -20, scale: 0.96 }}
+      transition={{ duration: 0.3 }}
+      className={`border-l-[5px] rounded-2xl p-4 flex items-start gap-3.5 transition-shadow duration-300
         ${SEV_CARD[sev]}
-        ${isResolving ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}
-        hover:shadow-md hover:-translate-y-0.5`}
+        ${!isResolving ? 'hover:shadow-lg hover:-translate-y-0.5' : 'pointer-events-none'}
+        bg-white/80 dark:bg-slate-800/60 backdrop-blur-sm`}
     >
-      <div className="w-9 h-9 rounded-full bg-white/60 dark:bg-slate-800/60 flex items-center justify-center text-lg flex-shrink-0 shadow-sm">
+      <div className="w-9 h-9 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center text-base flex-shrink-0 shadow-sm border border-slate-100 dark:border-slate-700">
         {TYPE_ICONS[conflict.type] || '⚠️'}
       </div>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap mb-1">
-          <span className="font-bold text-sm">{conflict.message}</span>
-          <span className={`text-[10px] font-black uppercase tracking-widest rounded-full px-2 py-0.5 ${SEV_BADGE[sev]}`}>
+          <span className="font-bold text-sm leading-snug">{conflict.message}</span>
+          <span className={`text-[9px] font-black uppercase tracking-widest rounded-full px-2.5 py-0.5 ${SEV_BADGE[sev]}`}>
             {sev}
           </span>
           {conflict.day && conflict.day !== 'All' && (
-            <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full px-2 py-0.5 font-semibold">
+            <span className="text-[9px] bg-white/70 dark:bg-slate-800/70 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded-full px-2 py-0.5 font-semibold">
               {conflict.day} · {conflict.time}
             </span>
           )}
         </div>
-        <p className="text-xs leading-relaxed opacity-80">{conflict.detail}</p>
+        <p className="text-xs leading-relaxed opacity-75">{conflict.detail}</p>
       </div>
 
       <button
         id={`resolve-${conflict.id || conflict.type}`}
         onClick={() => onResolve(conflict.id || conflict.detail)}
         title="Mark as resolved"
-        className="flex-shrink-0 p-2 rounded-lg hover:bg-white/60 dark:hover:bg-slate-700/60 transition-all duration-200 opacity-60 hover:opacity-100 hover:scale-110"
+        className="flex-shrink-0 p-2 rounded-xl bg-white/70 dark:bg-slate-700/50 border border-slate-200/70 dark:border-slate-600/50 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:border-emerald-300 dark:hover:border-emerald-700 transition-all duration-200 opacity-70 hover:opacity-100 hover:scale-110 shadow-sm"
       >
-        <FaCheckCircle className="text-emerald-500 text-base" />
+        <FaCheckCircle className="text-emerald-500 text-sm" />
       </button>
-    </div>
+    </motion.div>
   );
 }
 
@@ -188,19 +195,26 @@ function InsightPanel({ conflicts, meta }) {
 
 function EmptyState({ hasData }) {
   return (
-    <div className="text-center py-16">
-      <div className="w-20 h-20 mx-auto mb-5 rounded-full bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-950/60 dark:to-orange-950/60 flex items-center justify-center text-4xl">
-        {hasData ? '🎉' : '🔍'}
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="text-center py-16 px-6"
+    >
+      <div className="relative w-24 h-24 mx-auto mb-6">
+        <div className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-950/60 dark:to-orange-950/60 animate-pulse" style={{ animationDuration: '3s' }} />
+        <div className="absolute inset-2 rounded-full bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/40 dark:to-orange-900/40 flex items-center justify-center text-4xl">
+          {hasData ? '🎉' : '🔍'}
+        </div>
       </div>
       <h3 className="font-extrabold text-slate-700 dark:text-slate-200 text-xl mb-2">
-        {hasData ? 'All Clear — No Conflicts!' : 'No Scan Yet'}
+        {hasData ? 'All Clear — No Conflicts!' : 'Ready to Scan'}
       </h3>
       <p className="text-slate-500 dark:text-slate-400 text-sm max-w-xs mx-auto leading-relaxed">
         {hasData
           ? 'Your timetable loaded from MongoDB is conflict-free. Proceed to AI Optimization.'
-          : 'Click Scan Conflicts to analyse your real timetable from MongoDB.'}
+          : 'Click the Scan Conflicts button above to analyse your live timetable from MongoDB.'}
       </p>
-    </div>
+    </motion.div>
   );
 }
 
@@ -217,16 +231,42 @@ export default function ConflictDetection() {
   const [resolving,   setResolving]   = useState(null);
   const [seeding,     setSeeding]     = useState(false);
   const [dbEntries,   setDbEntries]   = useState(0);
+  const [dataRefreshed, setDataRefreshed] = useState(false); // banner: new data arrived
 
-  /* Load DB entry count on mount */
-  useEffect(() => {
-    getTimetables()
-      .then(res => {
-        const count = res.data?.count || 0;
-        setDbEntries(count);
-      })
-      .catch(() => {});
+  // Track previous count to detect changes made by other admins
+  const prevCountRef = useRef(0);
+
+  /* Load DB entry count — called manually and by the background poll */
+  const loadDbCount = useCallback(async (silent = false) => {
+    try {
+      const res = await getTimetables();
+      const count = res.data?.count || 0;
+      console.log('[ConflictDetection] DB entries:', count, silent ? '(background poll)' : '(manual)');
+      setDbEntries(count);
+    } catch (e) {
+      if (!silent) console.error('[ConflictDetection] loadDbCount error:', e.message);
+    }
   }, []);
+
+  /* Initial load + 5-second auto-polling */
+  useEffect(() => {
+    loadDbCount();
+    const interval = setInterval(() => loadDbCount(true), 5000);
+    return () => clearInterval(interval);
+  }, [loadDbCount]);
+
+  /* Auto-rescan when another admin changes the timetable */
+  useEffect(() => {
+    if (dbEntries === 0) { prevCountRef.current = 0; return; }
+    if (prevCountRef.current !== 0 && prevCountRef.current !== dbEntries) {
+      console.log('[ConflictDetection] Entry count changed:', prevCountRef.current, '→', dbEntries, '— auto-rescanning...');
+      setDataRefreshed(true);
+      // Auto-rescan silently if scan has been done before
+      if (scanned && !scanning) runScan(true);
+    }
+    prevCountRef.current = dbEntries;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbEntries]);
 
   /* ── Seed DB from AISetup config ── */
   const handleSeed = useCallback(async () => {
@@ -244,35 +284,44 @@ export default function ConflictDetection() {
     }
   }, []);
 
-  /* ── Run Conflict Scan on real DB data ── */
-  const runScan = useCallback(async () => {
-    setScanning(true);
-    setConflicts([]);
-    setSuggestions([]);
-    setScanned(false);
+  /* ── Run Conflict Scan on real DB data ──
+     silent = true → auto-rescan (no skeleton overlay, no toasts)
+  */
+  const runScan = useCallback(async (silent = false) => {
+    if (!silent) {
+      setScanning(true);
+      setConflicts([]);
+      setSuggestions([]);
+      setScanned(false);
+      setDataRefreshed(false);
+    }
 
     try {
       const res = await getTimetableConflicts();
       const { conflicts: found = [], suggestions: sugg = [], meta: m = {} } = res.data;
 
+      console.log('[ConflictDetection] Scan result:', found.length, 'conflicts in', m.totalEntries, 'entries', silent ? '(auto)' : '(manual)');
       setConflicts(found);
       setSuggestions(sugg);
       setMeta(m);
       setScanned(true);
+      if (!silent) setDataRefreshed(false);
 
-      if (m.totalEntries === 0) {
-        toast.warning('No timetable entries found in MongoDB — seed the database first');
-      } else if (found.length === 0) {
-        toast.success(`🌟 Scan complete — ${m.totalEntries} entries checked, no conflicts!`);
-      } else {
-        toast.warning(`📡 Found ${found.length} conflict${found.length > 1 ? 's' : ''} in ${m.totalEntries} entries`);
-        if (found.some(c => c.type === 'teacher')) toast.error('Teacher conflict detected');
-        if (found.some(c => c.type === 'room'))    toast.error('Room double-booking detected');
+      if (!silent) {
+        if (m.totalEntries === 0) {
+          toast.warning('No timetable entries found in MongoDB — seed the database first');
+        } else if (found.length === 0) {
+          toast.success(`🌟 Scan complete — ${m.totalEntries} entries checked, no conflicts!`);
+        } else {
+          toast.warning(`📡 Found ${found.length} conflict${found.length > 1 ? 's' : ''} in ${m.totalEntries} entries`);
+          if (found.some(c => c.type === 'teacher')) toast.error('Teacher conflict detected');
+          if (found.some(c => c.type === 'room'))    toast.error('Room double-booking detected');
+        }
       }
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Scan failed — is the backend running?');
+      if (!silent) toast.error(err?.response?.data?.message || 'Scan failed — is the backend running?');
     } finally {
-      setScanning(false);
+      if (!silent) setScanning(false);
     }
   }, []);
 
@@ -335,6 +384,14 @@ export default function ConflictDetection() {
           </div>
           <div className="flex gap-2">
             <button
+              id="reload-db-count-btn"
+              onClick={() => loadDbCount()}
+              title="Reload entry count from MongoDB"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-all active:scale-95"
+            >
+              <FaSync /> Reload from DB
+            </button>
+            <button
               id="seed-db-btn"
               onClick={handleSeed}
               disabled={seeding}
@@ -368,6 +425,22 @@ export default function ConflictDetection() {
             </div>
           ))}
         </div>
+
+        {/* ── Live Data Updated Notice ── */}
+        {dataRefreshed && !scanning && (
+          <div className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 mb-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-sm">
+            <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 font-semibold">
+              <FaWifi className="text-blue-500 animate-pulse" />
+              Live data updated — another admin changed the timetable
+            </div>
+            <button
+              onClick={() => runScan()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition-all active:scale-95"
+            >
+              <FaSync /> Re-scan
+            </button>
+          </div>
+        )}
 
         {/* ── Action Buttons ── */}
         <div className="flex flex-wrap gap-3 justify-center mb-4">
