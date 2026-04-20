@@ -5,25 +5,45 @@ import {
   FaFileAlt, FaArrowRight, FaSpinner,
 } from 'react-icons/fa';
 import { HiSparkles } from 'react-icons/hi2';
-/* DEMO MODE: no backend required */
+import { fetchAnalyticsSummary } from '../../services/analyticsService';
 
 const QUICK_LINKS = [
-  { to: '/analytics/teacher-workload',    label: 'Teacher Workload',    icon: <FaUserTie />,  color: 'from-blue-600 to-primary',        badge: 'bg-blue-50 text-primary border-blue-100' },
+  { to: '/analytics/teacher-workload',    label: 'Lecturer Workload',   icon: <FaUserTie />,  color: 'from-blue-600 to-primary',        badge: 'bg-blue-50 text-primary border-blue-100' },
   { to: '/analytics/subject-distribution',label: 'Subject Distribution',icon: <FaBookOpen />, color: 'from-secondary to-violet-700',    badge: 'bg-indigo-50 text-secondary border-indigo-100' },
   { to: '/analytics/resource-utilization',label: 'Resource Utilization',icon: <FaDoorOpen />, color: 'from-emerald-500 to-teal-600',   badge: 'bg-emerald-50 text-emerald-600 border-emerald-100' },
   { to: '/analytics/reports',             label: 'Reports & Insights',  icon: <FaFileAlt />,  color: 'from-amber-500 to-orange-500',    badge: 'bg-amber-50 text-amber-600 border-amber-100' },
 ];
 
 export default function Analytics() {
-  // DEMO MODE: static dummy counts — no backend required
-  const [stats]   = useState({ teachers: 7, subjects: 10, rooms: 6, timetable: 42 });
-  const [loading] = useState(false);
+  const [stats,   setStats]   = useState({ lecturers: 0, subjects: 0, rooms: 0, timetables: 0 });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchAnalyticsSummary()
+      .then(data => {
+        if (!cancelled) {
+          setStats({
+            lecturers:  data.lecturers  ?? 0,
+            subjects:   data.subjects   ?? 0,
+            rooms:      data.rooms      ?? 0,
+            timetables: data.timetables ?? 0,
+          });
+        }
+      })
+      .catch(err => {
+        console.error('[Analytics] fetchAnalyticsSummary failed:', err.message);
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   const KPI = [
-    { label: 'Registered Teachers', value: stats.teachers, color: 'text-primary'     },
-    { label: 'Registered Subjects', value: stats.subjects, color: 'text-secondary'   },
-    { label: 'Registered Rooms',    value: stats.rooms,    color: 'text-emerald-500'  },
-    { label: 'Timetable Entries',   value: stats.timetable,color: 'text-amber-500'   },
+    { label: 'Registered Lecturers', value: stats.lecturers,  color: 'text-primary'     },
+    { label: 'Registered Subjects',  value: stats.subjects,   color: 'text-secondary'   },
+    { label: 'Registered Rooms',     value: stats.rooms,      color: 'text-emerald-500'  },
+    { label: 'Timetable Entries',    value: stats.timetables, color: 'text-amber-500'   },
   ];
 
   return (
@@ -54,7 +74,7 @@ export default function Analytics() {
             Analytics <span className="bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">Hub</span>
           </h1>
           <p className="text-muted text-lg max-w-2xl">
-            Real-time analytics powered by live timetable data — teachers, subjects, rooms, and scheduling entries updated continuously.
+            Real-time analytics powered by live timetable data — lecturers, subjects, rooms, and scheduling entries updated continuously.
           </p>
         </div>
 
@@ -89,7 +109,7 @@ export default function Analytics() {
             </div>
             <h2 className="text-2xl font-extrabold text-white mb-1">Analytics Overview Dashboard</h2>
             <p className="text-slate-400 text-sm leading-relaxed max-w-lg">
-              All analytics in one place — teacher workload, subject distribution, room utilisation, filters, AI insights, and CRUD actions.
+              All analytics in one place — lecturer workload, subject distribution, room utilisation, filters, AI insights, and CRUD actions.
             </p>
           </div>
 

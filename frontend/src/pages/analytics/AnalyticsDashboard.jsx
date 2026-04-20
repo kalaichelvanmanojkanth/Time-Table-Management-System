@@ -12,52 +12,36 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend,
 } from 'recharts';
 import {
-  fetchTeachers, fetchSubjects, fetchRooms, fetchTimetables,
-  calcTeacherWorkload, calcRoomUtilization, calcSubjectDistribution,
+  fetchLecturers, fetchSubjects, fetchRooms, fetchTimetables,
+  calcLecturerWorkload, calcRoomUtilization, calcSubjectDistribution,
   detectRoomConflicts, generateInsights, calcWeeklyTrend,
-  // localStorage helpers
-  loadAllDataSources,
   calcWeeklyTrendFromSource,
   normalizeArray,
-  // session helpers
   normaliseEntries,
 } from '../../services/analyticsService';
-import { isBackendUnavailableError } from '../../services/api';
-import { getDemoData, hasUsableData } from '../../data/demoAnalytics';
 
 /* ── Constants ── */
 const PIE_COLORS = ['#6366f1','#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#14b8a6','#f97316'];
 
-/* Distinct palette for per-item coloring (Teacher Workload & Room Usage) */
+/* Distinct palette for per-item coloring */
 const CHART_COLORS = [
-  '#6366f1', // indigo
-  '#0ea5e9', // sky
-  '#10b981', // emerald
-  '#f59e0b', // amber
-  '#ec4899', // pink
-  '#8b5cf6', // violet
-  '#14b8a6', // teal
-  '#f97316', // orange
-  '#06b6d4', // cyan
-  '#84cc16', // lime
-  '#a855f7', // purple
-  '#fb7185', // rose
+  '#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899',
+  '#8b5cf6', '#14b8a6', '#f97316', '#06b6d4', '#84cc16',
+  '#a855f7', '#fb7185',
 ];
 
-/* Status override colors — mixed with per-index color for clear distinction */
 const STATUS_COLORS = {
-  overloaded:  '#ef4444',  // red — always override for critical
-  underloaded: '#f59e0b',  // amber — warning
-  optimal:     null,        // use per-index CHART_COLORS for optimal teachers
+  overloaded:  '#ef4444',
+  underloaded: '#f59e0b',
+  optimal:     null,
 };
 
-const DEFAULT_FILTERS = { teacherId: '', subjectId: '', roomId: '', period: 'week' };
+const DEFAULT_FILTERS = { lecturerId: '', subjectId: '', roomId: '', period: 'week' };
 
 /* ══════════════════════════════════════════════════════
    SUB-COMPONENTS
 ══════════════════════════════════════════════════════ */
 
-/* Loading skeleton */
 function LoadingState() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-5">
@@ -82,7 +66,6 @@ function LoadingState() {
   );
 }
 
-/* Empty state */
 function EmptyState({ title, desc, icon: Icon = FaChartBar, action }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
@@ -96,7 +79,6 @@ function EmptyState({ title, desc, icon: Icon = FaChartBar, action }) {
   );
 }
 
-/* KPI Card */
 function KPICard({ icon, label, value, color, bg, trend }) {
   return (
     <div className={`${bg} rounded-2xl p-5 shadow-sm border border-white/60 flex items-center gap-4 hover:shadow-md transition-shadow`}>
@@ -112,7 +94,6 @@ function KPICard({ icon, label, value, color, bg, trend }) {
   );
 }
 
-/* Mini chart card */
 function MiniCard({ title, children, empty }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
@@ -124,13 +105,13 @@ function MiniCard({ title, children, empty }) {
   );
 }
 
-/* Full chart card */
-function ChartCard({ title, subtitle, icon, children, empty, emptyText = 'No data for selected filters' }) {
+function ChartCard({ title, subtitle, icon, badge, children, empty, emptyText = 'No data for selected filters' }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-      <div className="flex items-center gap-2 mb-1">
+      <div className="flex items-center gap-2 mb-1 flex-wrap">
         <span className="text-lg">{icon}</span>
         <h3 className="font-extrabold text-slate-800">{title}</h3>
+        {badge && <span className="ml-auto">{badge}</span>}
       </div>
       {subtitle && <p className="text-xs text-slate-400 mb-5">{subtitle}</p>}
       {empty
@@ -140,7 +121,6 @@ function ChartCard({ title, subtitle, icon, children, empty, emptyText = 'No dat
   );
 }
 
-/* Insight pill */
 function InsightCard({ ins }) {
   const map = {
     warning: { bg: 'bg-amber-50  border-amber-200',     dot: 'bg-amber-400',  label: 'bg-amber-100  text-amber-700',   emoji: '⚠️' },
@@ -163,7 +143,6 @@ function InsightCard({ ins }) {
   );
 }
 
-/* Confirm dialog */
 function ConfirmDialog({ title, body, onCancel, onConfirm, danger }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
@@ -187,7 +166,6 @@ function ConfirmDialog({ title, body, onCancel, onConfirm, danger }) {
   );
 }
 
-/* Custom bar label — suffix is 'h' (hours) or 'cls' (class count) */
 const BarLabel = ({ x, y, width, value, suffix = 'h' }) => (
   <text x={x + width / 2} y={y - 5} fill="#94a3b8" textAnchor="middle" fontSize={10} fontWeight={700}>{value}{suffix}</text>
 );
@@ -197,15 +175,11 @@ const BarLabel = ({ x, y, width, value, suffix = 'h' }) => (
 ══════════════════════════════════════════════════════ */
 export default function AnalyticsDashboard() {
   /* Data */
-  const [teachers,  setTeachers]  = useState([]);
+  const [lecturers, setLecturers] = useState([]);
   const [subjects,  setSubjects]  = useState([]);
   const [rooms,     setRooms]     = useState([]);
   const [timetable, setTimetable] = useState([]);
-  const [sessions, setSessions] = useState([]); // flattened/normalized session records used by charts
-  /* Tracks whether data came from localStorage (for info banner) */
-  const [fromStorage, setFromStorage] = useState(false);
-  /* WorkingDays from localStorage setup — used by calcWeeklyTrendFromSource */
-  const [setupWorkingDays, setSetupWorkingDays] = useState([]);
+  const [sessions,  setSessions]  = useState([]);
 
   /* UI state */
   const [loading,   setLoading]   = useState(true);
@@ -217,29 +191,34 @@ export default function AnalyticsDashboard() {
   const [showClearDlg,  setShowClearDlg]  = useState(false);
   const [reportDeleted, setReportDeleted] = useState(false);
   const [showDelDlg,    setShowDelDlg]    = useState(false);
-  /* Demo fallback — true when API completely fails and we use local dummy data */
-  const [demoMode, setDemoMode] = useState(false);
 
-  /* ── Load: Demo Mode — no backend required ── */
+  /* ── Load real data from backend ── */
   const loadAll = useCallback(async () => {
     setLoading(true);
     setError('');
     setCleared(false);
     setReportDeleted(false);
-    setFromStorage(false);
 
-    // DEMO MODE: skip API entirely, use pre-built dummy data
-    const demo = getDemoData();
-    setTeachers(demo.teachers);
-    setSubjects(demo.subjects);
-    setRooms(demo.rooms);
-    setTimetable(demo.sessions);
-    setSessions(demo.sessions);
-    setSetupWorkingDays([]);
-    setDemoMode(true);
-    setError('');
-    setLastSync(new Date());
-    setLoading(false);
+    try {
+      const [lecs, subjs, rms, tts] = await Promise.all([
+        fetchLecturers().catch(e => { console.error('[Dashboard] fetchLecturers:', e.message); return []; }),
+        fetchSubjects().catch(e  => { console.error('[Dashboard] fetchSubjects:', e.message);  return []; }),
+        fetchRooms().catch(e     => { console.error('[Dashboard] fetchRooms:', e.message);     return []; }),
+        fetchTimetables().catch(e=> { console.error('[Dashboard] fetchTimetables:', e.message);return []; }),
+      ]);
+
+      setLecturers(normalizeArray(lecs));
+      setSubjects(normalizeArray(subjs));
+      setRooms(normalizeArray(rms));
+      setTimetable(normalizeArray(tts));
+      setSessions(normalizeArray(tts));
+      setLastSync(new Date());
+    } catch (err) {
+      console.error('[Dashboard] loadAll error:', err.message);
+      setError(`Failed to load analytics data: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
@@ -249,14 +228,13 @@ export default function AnalyticsDashboard() {
     try {
       const payload = {
         exportedAt: new Date().toISOString(),
-        fromLocalStorage: fromStorage,
         summary: {
-          teachers: teachers.length,
-          subjects: subjects.length,
-          rooms:    rooms.length,
+          lecturers:       lecturers.length,
+          subjects:        subjects.length,
+          rooms:           rooms.length,
           scheduledClasses: sessions.length,
         },
-        teachers,
+        lecturers,
         subjects,
         rooms,
         timetable,
@@ -272,69 +250,74 @@ export default function AnalyticsDashboard() {
     } catch (e) {
       console.error('Export failed:', e);
     }
-  }, [teachers, subjects, rooms, timetable, fromStorage]);
+  }, [lecturers, subjects, rooms, timetable, sessions]);
 
   /* Search-filtered master lists */
   const q = search.toLowerCase().trim();
-  const sTeachers = useMemo(() => q ? teachers.filter(t => t.name?.toLowerCase().includes(q) || t.department?.toLowerCase().includes(q)) : teachers, [teachers, q]);
-  const sSubjects = useMemo(() => q ? subjects.filter(s => s.name?.toLowerCase().includes(q) || s.department?.toLowerCase().includes(q)) : subjects, [subjects, q]);
-  const sRooms    = useMemo(() => q ? rooms.filter(r => r.name?.toLowerCase().includes(q) || r.type?.toLowerCase().includes(q)) : rooms, [rooms, q]);
+  const sLecturers = useMemo(() => q ? lecturers.filter(l => l.name?.toLowerCase().includes(q) || l.department?.toLowerCase().includes(q)) : lecturers, [lecturers, q]);
+  const sSubjects  = useMemo(() => q ? subjects.filter(s => s.name?.toLowerCase().includes(q) || s.department?.toLowerCase().includes(q)) : subjects, [subjects, q]);
+  const sRooms     = useMemo(() => q ? rooms.filter(r => r.name?.toLowerCase().includes(q) || r.type?.toLowerCase().includes(q)) : rooms, [rooms, q]);
 
-  /* Filtered sessions (derived from timetable) */
+  /* Filtered sessions */
   const filteredSessions = useMemo(() => {
     if (cleared) return [];
     return sessions.filter(e => {
-      const tid = e.teacherId?._id || e.teacherId;
-      const sid = e.subjectId?._id || e.subjectId;
-      const rid = e.roomId?._id    || e.roomId;
-      if (filters.teacherId && tid?.toString() !== filters.teacherId) return false;
-      if (filters.subjectId && sid?.toString() !== filters.subjectId) return false;
-      if (filters.roomId    && rid?.toString() !== filters.roomId)    return false;
+      const lid = e.lecturerId?._id || e.lecturerId || e.teacherId?._id || e.teacherId;
+      const sid = e.subjectId?._id  || e.subjectId;
+      const rid = e.roomId?._id     || e.roomId;
+      if (filters.lecturerId && lid?.toString() !== filters.lecturerId) return false;
+      if (filters.subjectId  && sid?.toString() !== filters.subjectId)  return false;
+      if (filters.roomId     && rid?.toString() !== filters.roomId)     return false;
       if (q) {
-        const teacherMatch = sTeachers.some(t => t._id === tid);
-        const subjectMatch = sSubjects.some(s => s._id === sid);
-        const roomMatch    = sRooms.some(r => r._id === rid);
-        if (!teacherMatch && !subjectMatch && !roomMatch) return false;
+        const lecturerMatch = sLecturers.some(l => l._id === lid);
+        const subjectMatch  = sSubjects.some(s => s._id === sid);
+        const roomMatch     = sRooms.some(r => r._id === rid);
+        if (!lecturerMatch && !subjectMatch && !roomMatch) return false;
       }
       return true;
     });
-  }, [sessions, filters, cleared, q, sTeachers, sSubjects, sRooms]);
+  }, [sessions, filters, cleared, q, sLecturers, sSubjects, sRooms]);
 
-  const fTeachers = useMemo(() => filters.teacherId ? sTeachers.filter(t => t._id === filters.teacherId) : sTeachers, [sTeachers, filters.teacherId]);
-  const fSubjects = useMemo(() => filters.subjectId ? sSubjects.filter(s => s._id === filters.subjectId) : sSubjects, [sSubjects, filters.subjectId]);
-  const fRooms    = useMemo(() => filters.roomId    ? sRooms.filter(r => r._id === filters.roomId)       : sRooms,    [sRooms,    filters.roomId]);
+  const fLecturers = useMemo(() => filters.lecturerId ? sLecturers.filter(l => l._id === filters.lecturerId) : sLecturers, [sLecturers, filters.lecturerId]);
+  const fSubjects  = useMemo(() => filters.subjectId  ? sSubjects.filter(s => s._id === filters.subjectId)   : sSubjects,  [sSubjects, filters.subjectId]);
+  const fRooms     = useMemo(() => filters.roomId      ? sRooms.filter(r => r._id === filters.roomId)         : sRooms,     [sRooms,    filters.roomId]);
 
   /* Analytics */
-  const workload    = useMemo(() => calcTeacherWorkload(fTeachers, filteredSessions),    [fTeachers, filteredSessions]);
-  const roomUtil    = useMemo(() => calcRoomUtilization(fRooms,    filteredSessions),    [fRooms,    filteredSessions]);
-  const subjectDist = useMemo(() => calcSubjectDistribution(fSubjects, filteredSessions),[fSubjects,  filteredSessions]);
-  const conflicts   = useMemo(() => detectRoomConflicts(filteredSessions),               [filteredSessions]);
+  const workload    = useMemo(() => calcLecturerWorkload(fLecturers, filteredSessions),   [fLecturers, filteredSessions]);
+  const roomUtil    = useMemo(() => calcRoomUtilization(fRooms,      filteredSessions),   [fRooms,     filteredSessions]);
+  const subjectDist = useMemo(() => calcSubjectDistribution(fSubjects, filteredSessions), [fSubjects,  filteredSessions]);
+  const conflicts   = useMemo(() => detectRoomConflicts(filteredSessions),                [filteredSessions]);
   const insights    = useMemo(() => generateInsights(workload, roomUtil, conflicts, subjectDist), [workload, roomUtil, conflicts, subjectDist]);
 
-  /* Chart data */
-  // If all teachers have 0 total hours but have classes, fall back to class-count display
-  const useClassCount = workload.length > 0
-    && workload.every(w => w.totalHours === 0)
-    && workload.some(w => w.totalClasses > 0);
+  /* ── DEMO DATA (temporary presentation mode) ──
+   * workloadData and roomBar always return these arrays so the charts
+   * are ALWAYS visible regardless of backend state.
+   * Subject Usage and Weekly Schedule are unaffected — they still use live data.
+   * ────────────────────────────────────────────────────────── */
+  const LECTURER_WORKLOAD_DEMO = [
+    { name: 'Dr.Nimal',   hours:  7, fullName: 'Dr.Nimal',   status: 'optimal',     suffix: 'h', fill: '#6366f1' },
+    { name: 'Jana',       hours:  9, fullName: 'Jana',       status: 'optimal',     suffix: 'h', fill: '#6366f1' },
+    { name: 'Jaysooriya', hours: 13, fullName: 'Jaysooriya', status: 'underloaded', suffix: 'h', fill: '#f59e0b' },
+    { name: 'Perera',     hours: 17, fullName: 'Perera',     status: 'optimal',     suffix: 'h', fill: '#6366f1' },
+    { name: 'Thilani',    hours: 21, fullName: 'Thilani',    status: 'overloaded',  suffix: 'h', fill: '#ef4444' },
+  ];
 
-  const workloadData = useMemo(() => workload.map((w, i) => {
-    // Status-based override (overloaded=red, underloaded=amber)
-    // Optimal teachers each get a distinct color from CHART_COLORS palette
-    const statusColor = STATUS_COLORS[w.status];
-    const distinctColor = CHART_COLORS[i % CHART_COLORS.length];
-    return {
-      name:     (w.teacherName || '').split(' ')[0],
-      hours:    useClassCount ? w.totalClasses : w.totalHours,
-      classes:  w.totalClasses,
-      fullName: w.teacherName,
-      suffix:   useClassCount ? 'cls' : 'h',
-      status:   w.status,
-      fill:     statusColor ?? distinctColor, // status wins for overloaded/underloaded, index color for optimal
-    };
-  }), [workload, useClassCount]);
-  console.log('[Dashboard] teacherWorkloadData:', workloadData);
+  const ROOM_USAGE_DEMO = [
+    { name: 'Lab A402', pct: 58, fill: '#10b981' },
+    { name: 'G1304',    pct: 67, fill: '#10b981' },
+    { name: 'B405',     pct: 73, fill: '#f59e0b' },
+    { name: 'B401',     pct: 82, fill: '#ef4444' },
+    { name: 'AB402',    pct: 49, fill: '#10b981' },
+    { name: 'A403',     pct: 61, fill: '#10b981' },
+    { name: 'A402',     pct: 76, fill: '#f59e0b' },
+  ];
 
-  // Subject pie: real scheduled hours; fallback to weeklyHours when no entries yet
+  /* Chart data — workload and room always use demo arrays */
+  // eslint-disable-next-line no-unused-vars
+  const useClassCount = false; // demo data uses hours, not class count
+
+  const workloadData = LECTURER_WORKLOAD_DEMO;
+
   const subjectPie = useMemo(() => reportDeleted ? [] : subjectDist
     .filter(s => s.scheduledHours > 0)
     .map((s, i) => ({ name: s.subjectName, value: s.scheduledHours, fill: PIE_COLORS[i % PIE_COLORS.length] })),
@@ -345,46 +328,19 @@ export default function AnalyticsDashboard() {
   })), [fSubjects, reportDeleted]);
 
   const subjectPieFinal = subjectPie.length > 0 ? subjectPie : subjectPieFallback;
-  console.log('[Dashboard] subjectSplitData:', subjectPieFinal);
 
-  // Room bar — each room gets a DISTINCT index-based color;
-  // additionally overlay semantic color for overbooked/high-usage rooms
-  const roomBar = useMemo(() => roomUtil.map((r, i) => {
-    // semantic tier color
-    const tierColor = r.utilization >= 100 ? '#ef4444'
-      : r.utilization >= 70 ? '#f59e0b'
-      : CHART_COLORS[i % CHART_COLORS.length]; // normal rooms: distinct per-room color
-    return {
-      name: r.roomName,
-      pct:  r.utilization,
-      fill: tierColor,
-    };
-  }), [roomUtil]);
-  console.log('[Dashboard] roomUsageData:', roomBar);
+  const roomBar = ROOM_USAGE_DEMO;
 
-  // Weekly trend — use localStorage workingDays-aware version when data came from storage
-  const weeklyTrend = useMemo(() => {
-    // If filteredSessions is non-empty, use standard week-trend on the filtered set
-    if (filteredSessions.length > 0) {
-      return fromStorage
-        ? calcWeeklyTrendFromSource(setupWorkingDays, filteredSessions)
-        : calcWeeklyTrend(filteredSessions);
-    }
-    // No filtered entries but we have stored sessions — use full sessions for trend
-    if (fromStorage && sessions.length > 0) {
-      return calcWeeklyTrendFromSource(setupWorkingDays, sessions);
-    }
-    // Absolute fallback — returns 6 zero-entry days
-    return calcWeeklyTrend([]);
-  }, [filteredSessions, fromStorage, setupWorkingDays, sessions]);
-  console.log('[Dashboard] weeklyTrendData:', weeklyTrend);
+  const weeklyTrend = useMemo(() => calcWeeklyTrend(filteredSessions.length > 0 ? filteredSessions : sessions), [filteredSessions, sessions]);
 
   /* Filter/search state */
-  const hasFilters    = filters.teacherId || filters.subjectId || filters.roomId || filters.period !== 'week';
-  const hasSearch     = !!q;
-  const noData        = !loading && teachers.length === 0 && subjects.length === 0 && rooms.length === 0;
-  const noTimetable   = !loading && !noData && sessions.length === 0;
-  const noResults     = !loading && !noData && !noTimetable && filteredSessions.length === 0 && (hasFilters || hasSearch);
+  const hasFilters  = filters.lecturerId || filters.subjectId || filters.roomId || filters.period !== 'week';
+  const hasSearch   = !!q;
+  // noData: demo arrays guarantee workload+room always have data, so only flag truly empty state
+  const noData      = !loading && lecturers.length === 0 && subjects.length === 0 && rooms.length === 0
+                      && sessions.length === 0; // demo charts always shown, so only hide section when ALL empty
+  const noTimetable = false; // weekly trend and subjects may be empty, but workload/room always have demo
+  const noResults   = !loading && !noData && filteredSessions.length === 0 && (hasFilters || hasSearch);
 
   const sel = 'text-xs font-semibold px-3 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-indigo-400 bg-white text-slate-700 transition-all';
 
@@ -432,12 +388,6 @@ export default function AnalyticsDashboard() {
               className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-rose-50 text-rose-500 border border-rose-200 hover:bg-rose-100 transition-all">
               <FaTrash className="text-[10px]" /> Clear
             </button>
-            {/* localStorage source indicator */}
-            {fromStorage && !cleared && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold tracking-widest uppercase text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1">
-                📦 Local
-              </span>
-            )}
             <button id="btn-refresh" onClick={loadAll}
               className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition-all shadow-sm">
               <FaSync className="text-[10px]" /> Refresh
@@ -457,11 +407,18 @@ export default function AnalyticsDashboard() {
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-tight">
               Your Timetable Overview
             </h1>
-            <p className="text-slate-400 text-sm mt-1">Real-time insights for your teachers, subjects, rooms, and scheduled classes.</p>
+            <p className="text-slate-400 text-sm mt-1">Real-time insights for your lecturers, subjects, rooms, and scheduled classes.</p>
           </div>
         </div>
 
-        {/* No network error banner — demo mode handles everything silently */}
+        {/* Error banner */}
+        {error && (
+          <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex items-center gap-3 text-rose-700">
+            <FaExclamationTriangle className="flex-shrink-0 text-sm" />
+            <span className="text-sm font-semibold flex-1">{error}</span>
+            <button onClick={loadAll} className="text-xs font-bold underline flex-shrink-0">Retry</button>
+          </div>
+        )}
 
         {/* Cleared / Report deleted banners */}
         {cleared && (
@@ -493,7 +450,6 @@ export default function AnalyticsDashboard() {
 
         {/* ── 2. SEARCH + FILTERS ── */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-3">
-          {/* Search */}
           <div className="relative">
             <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-300 text-xs" />
             <input
@@ -501,7 +457,7 @@ export default function AnalyticsDashboard() {
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search teachers, subjects, rooms…"
+              placeholder="Search lecturers, subjects, rooms…"
               className="w-full pl-9 pr-4 py-2.5 text-sm rounded-xl border border-slate-200 outline-none focus:border-indigo-400 bg-slate-50 placeholder-slate-300 text-slate-700 transition-all"
             />
             {search && (
@@ -511,15 +467,14 @@ export default function AnalyticsDashboard() {
             )}
           </div>
 
-          {/* Filters */}
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400">
               <FaFilter className="text-[9px]" /> Filters
             </span>
             <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <select id="f-teacher" value={filters.teacherId} onChange={e => setFilters(p => ({ ...p, teacherId: e.target.value }))} className={sel}>
-                <option value="">All Teachers</option>
-                {teachers.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
+              <select id="f-lecturer" value={filters.lecturerId} onChange={e => setFilters(p => ({ ...p, lecturerId: e.target.value }))} className={sel}>
+                <option value="">All Lecturers</option>
+                {lecturers.map(l => <option key={l._id} value={l._id}>{l.name}</option>)}
               </select>
               <select id="f-subject" value={filters.subjectId} onChange={e => setFilters(p => ({ ...p, subjectId: e.target.value }))} className={sel}>
                 <option value="">All Subjects</option>
@@ -549,7 +504,7 @@ export default function AnalyticsDashboard() {
 
         {/* ── 3. KPI CARDS ── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <KPICard icon={<FaUserTie />}     label="Teachers"          value={cleared ? 0 : sTeachers.length} color="text-blue-600"    bg="bg-gradient-to-br from-blue-50    to-blue-100/60"    trend={`${filteredSessions.filter((e,_,a)=>a.findIndex(x=>(x.teacherId?._id||x.teacherId)===(e.teacherId?._id||e.teacherId))===_).length} active this week`} />
+          <KPICard icon={<FaUserTie />}     label="Lecturers"         value={cleared ? 0 : sLecturers.length} color="text-blue-600"    bg="bg-gradient-to-br from-blue-50    to-blue-100/60"    trend={`${filteredSessions.filter((e,_,a) => a.findIndex(x => (x.lecturerId?._id||x.lecturerId||x.teacherId?._id||x.teacherId) === (e.lecturerId?._id||e.lecturerId||e.teacherId?._id||e.teacherId)) === _).length} active this week`} />
           <KPICard icon={<FaBookOpen />}    label="Subjects"          value={cleared ? 0 : fSubjects.length} color="text-indigo-600"  bg="bg-gradient-to-br from-indigo-50  to-indigo-100/60"  trend={`Across ${[...new Set(subjects.map(s=>s.department).filter(Boolean))].length} departments`} />
           <KPICard icon={<FaDoorOpen />}    label="Rooms"             value={cleared ? 0 : fRooms.length}    color="text-emerald-600" bg="bg-gradient-to-br from-emerald-50 to-emerald-100/60" trend={`${roomUtil.filter(r=>r.utilization>0).length} in use`} />
           <KPICard icon={<FaCalendarAlt />} label="Scheduled Classes" value={cleared ? 0 : sessions.length} color="text-amber-600"   bg="bg-gradient-to-br from-amber-50   to-amber-100/60"   trend={`${conflicts.length} conflict${conflicts.length !== 1 ? 's' : ''} detected`} />
@@ -558,20 +513,19 @@ export default function AnalyticsDashboard() {
         {/* ── 4. MINI SUMMARY CHARTS ── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
 
-          {/* Mini workload */}
-          <MiniCard title="Workload Snapshot" empty={workloadData.length === 0}>
-            <ResponsiveContainer width="100%" height={96}>
-              <BarChart data={workloadData.slice(0,5)} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+          <MiniCard title="Workload Snapshot" empty={false}>
+            <p className="text-[9px] text-slate-400 text-center mb-1 opacity-70">Sample Data · Demo</p>
+            <ResponsiveContainer width="100%" height={88}>
+              <BarChart data={LECTURER_WORKLOAD_DEMO.slice(0,5)} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                 <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#94a3b8' }} />
                 <Tooltip formatter={(v, n, p) => [`${p.payload.fullName}: ${v}h`, '']} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
                 <Bar dataKey="hours" radius={[3,3,0,0]}>
-                  {workloadData.slice(0,5).map((e, i) => <Cell key={i} fill={e.fill} />)}
+                  {LECTURER_WORKLOAD_DEMO.slice(0,5).map((e, i) => <Cell key={i} fill={e.fill} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </MiniCard>
 
-          {/* Mini subject pie */}
           <MiniCard title="Subject Split" empty={subjectPieFinal.length === 0}>
             <ResponsiveContainer width="100%" height={96}>
               <PieChart>
@@ -583,21 +537,20 @@ export default function AnalyticsDashboard() {
             </ResponsiveContainer>
           </MiniCard>
 
-          {/* Mini room usage */}
-          <MiniCard title="Room Usage" empty={roomBar.length === 0}>
-            <ResponsiveContainer width="100%" height={96}>
-              <BarChart data={roomBar.slice(0,5)} layout="vertical" margin={{ top: 0, right: 4, left: -4, bottom: 0 }}>
+          <MiniCard title="Room Usage" empty={false}>
+            <p className="text-[9px] text-slate-400 text-center mb-1 opacity-70">Sample Data · Demo</p>
+            <ResponsiveContainer width="100%" height={88}>
+              <BarChart data={ROOM_USAGE_DEMO.slice(0,5)} layout="vertical" margin={{ top: 0, right: 4, left: -4, bottom: 0 }}>
                 <XAxis type="number" domain={[0,100]} hide />
                 <YAxis dataKey="name" type="category" tick={{ fontSize: 9, fill: '#94a3b8' }} width={36} />
                 <Tooltip formatter={v => [`${v}%`, 'Usage']} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
                 <Bar dataKey="pct" radius={[0,3,3,0]}>
-                  {roomBar.slice(0,5).map((e, i) => <Cell key={i} fill={e.fill} />)}
+                  {ROOM_USAGE_DEMO.slice(0,5).map((e, i) => <Cell key={i} fill={e.fill} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </MiniCard>
 
-          {/* Mini weekly trend */}
           <MiniCard title="Weekly Trend" empty={weeklyTrend.every(d => d.entries === 0)}>
             <ResponsiveContainer width="100%" height={96}>
               <LineChart data={weeklyTrend} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
@@ -614,7 +567,7 @@ export default function AnalyticsDashboard() {
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm">
             <EmptyState
               title="No analytics yet"
-              desc="Add teachers, subjects, rooms, and timetable entries to see insights here."
+              desc="Add lecturers, subjects, rooms, and timetable entries to see insights here."
               icon={FaChartBar}
               action={<Link to="/ai/setup" className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-700 transition-colors">Add Timetable Data</Link>}
             />
@@ -632,31 +585,26 @@ export default function AnalyticsDashboard() {
         {/* ── 5. MAIN CHARTS ── */}
         {!noData && (
           <div className="grid lg:grid-cols-2 gap-6">
-            {/* Teacher Workload */}
+            {/* Lecturer Workload */}
             <ChartCard
               icon={<FaUserTie className="text-blue-500" />}
-              title="Teacher Workload"
-              subtitle={useClassCount ? 'Classes assigned per teacher (no time data)' : 'Weekly teaching hours per faculty member'}
-              empty={workloadData.length === 0}
-              emptyText="No teacher workload data available"
+              title="Lecturer Workload"
+              subtitle="Weekly teaching hours per faculty member"
+              badge={<span className="text-[10px] text-slate-400 opacity-60 font-semibold border border-slate-200 rounded-full px-2 py-0.5">Sample Data · Demo</span>}
+              empty={false}
+              emptyText="No lecturer workload data available"
             >
               <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={workloadData} margin={{ top: 20, right: 10, left: -10, bottom: 0 }}>
+                <BarChart data={LECTURER_WORKLOAD_DEMO} margin={{ top: 20, right: 10, left: -10, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }} />
-                  <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} />
+                  <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} domain={[0, 25]} />
                   <Tooltip
-                    formatter={(v, _, p) => [
-                      useClassCount
-                        ? `${p.payload.fullName}: ${v} class(es)`
-                        : `${p.payload.fullName}: ${v}h`,
-                      useClassCount ? 'Classes' : 'Hours',
-                    ]}
+                    formatter={(v, _, p) => [`${p.payload.fullName}: ${v}h`, 'Hours']}
                     contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }}
                   />
-                  <Bar dataKey="hours" radius={[6,6,0,0]}
-                    label={<BarLabel suffix={workloadData[0]?.suffix || 'h'} />}>
-                    {workloadData.map((e, i) => <Cell key={i} fill={e.fill} />)}
+                  <Bar dataKey="hours" radius={[6,6,0,0]} label={<BarLabel suffix="h" />}>
+                    {LECTURER_WORKLOAD_DEMO.map((e, i) => <Cell key={i} fill={e.fill} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -664,7 +612,6 @@ export default function AnalyticsDashboard() {
                 <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-indigo-500 inline-block"/> Optimal</span>
                 <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-rose-500 inline-block"/> Overloaded</span>
                 <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-400 inline-block"/> Under-load</span>
-                {useClassCount && <span className="text-amber-600 ml-auto">* Showing class count (add start/end times for hours)</span>}
               </div>
             </ChartCard>
 
@@ -686,17 +633,18 @@ export default function AnalyticsDashboard() {
               icon={<FaDoorOpen className="text-emerald-500" />}
               title="Room Usage"
               subtitle="Utilization % — scheduled hours vs 40h weekly capacity"
-              empty={roomBar.length === 0}
+              badge={<span className="text-[10px] text-slate-400 opacity-60 font-semibold border border-slate-200 rounded-full px-2 py-0.5">Sample Data · Demo</span>}
+              empty={false}
               emptyText="No room usage data available"
             >
               <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={roomBar} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
+                <BarChart data={ROOM_USAGE_DEMO} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
                   <XAxis type="number" domain={[0,100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 11, fill: '#94a3b8' }} />
                   <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: '#64748b', fontWeight: 600 }} width={60} />
                   <Tooltip formatter={v => [`${v}%`, 'Usage']} contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} />
                   <Bar dataKey="pct" radius={[0,6,6,0]}>
-                    {roomBar.map((e, i) => <Cell key={i} fill={e.fill} />)}
+                    {ROOM_USAGE_DEMO.map((e, i) => <Cell key={i} fill={e.fill} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -782,7 +730,7 @@ export default function AnalyticsDashboard() {
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Detailed Pages</p>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { to: '/analytics/teacher-workload',    label: 'Teacher Workload',    icon: <FaUserTie />,      color: 'from-blue-500 to-indigo-600' },
+              { to: '/analytics/teacher-workload',    label: 'Lecturer Workload',   icon: <FaUserTie />,      color: 'from-blue-500 to-indigo-600' },
               { to: '/analytics/subject-distribution',label: 'Subject Distribution',icon: <FaBookOpen />,     color: 'from-indigo-500 to-violet-600' },
               { to: '/analytics/resource-utilization',label: 'Room Utilization',    icon: <FaDoorOpen />,     color: 'from-emerald-500 to-teal-600' },
               { to: '/analytics/reports',             label: 'Reports & Insights',  icon: <FaCheckCircle />,  color: 'from-amber-500 to-orange-500' },
@@ -806,7 +754,3 @@ export default function AnalyticsDashboard() {
     </div>
   );
 }
-
-console.log('body background-color:', getComputedStyle(document.body).backgroundColor);
-console.log('index.css loaded?', !!document.querySelector('link[href*="index.css"],style[data-vite-dev-id]'));
-console.log('svg count:', document.querySelectorAll('svg').length);

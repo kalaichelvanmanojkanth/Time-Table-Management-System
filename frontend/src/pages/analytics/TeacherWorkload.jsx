@@ -6,8 +6,11 @@ import {
   FaTimesCircle, FaInfoCircle, FaSave, FaSync, FaSpinner,
 } from 'react-icons/fa';
 import { HiSparkles } from 'react-icons/hi2';
-
-/* ── DEMO MODE: Pure dummy data – no backend required ── */
+import {
+  fetchLecturers, fetchTimetables, calcLecturerWorkload,
+  createLecturer, updateLecturer, deleteLecturer,
+  normalizeArray,
+} from '../../services/analyticsService';
 
 /* ── reveal ── */
 function useReveal() {
@@ -140,67 +143,119 @@ function HoursBar({ hours, max }) {
 
 const EMPTY_FORM = { name: '', department: '', subjects: '', maxWeeklyHours: '20' };
 
-/* ── Dummy Data ── */
-const DUMMY_WORKLOAD = [
-  { teacherId: 't001', teacherName: 'Dr. Nimal Perera',   department: 'Information Technology',      totalHours: 24, maxWeeklyHours: 20, status: 'overloaded'  },
-  { teacherId: 't002', teacherName: 'Prof. Kasun Silva',  department: 'Computer Science',             totalHours: 18, maxWeeklyHours: 20, status: 'optimal'     },
-  { teacherId: 't003', teacherName: 'Ms. Tharushi Dias',  department: 'Computer System Engineering',  totalHours: 8,  maxWeeklyHours: 20, status: 'underloaded' },
-  { teacherId: 't004', teacherName: 'Mr. Ruwan Fernando', department: 'Computer System Networks',     totalHours: 20, maxWeeklyHours: 20, status: 'optimal'     },
-  { teacherId: 't005', teacherName: 'Dr. Amali Jayawardena', department: 'Computer Science',         totalHours: 22, maxWeeklyHours: 20, status: 'overloaded'  },
-  { teacherId: 't006', teacherName: 'Prof. Dinesh Mendis', department: 'Information Technology',     totalHours: 16, maxWeeklyHours: 20, status: 'optimal'     },
-  { teacherId: 't007', teacherName: 'Ms. Sachini Bandara', department: 'Computer System Engineering',totalHours: 6,  maxWeeklyHours: 20, status: 'underloaded' },
-];
-
-const DUMMY_TEACHERS = DUMMY_WORKLOAD.map(w => ({
-  _id: w.teacherId,
-  name: w.teacherName,
-  department: w.department,
-  maxWeeklyHours: w.maxWeeklyHours,
-}));
+/* ── Loading skeleton ── */
+function LoadingCard() {
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-md p-5 animate-pulse">
+      <div className="flex items-start gap-3 mb-3">
+        <div className="w-10 h-10 rounded-xl bg-slate-200 flex-shrink-0" />
+        <div className="flex-1">
+          <div className="h-4 bg-slate-200 rounded w-1/2 mb-2" />
+          <div className="h-3 bg-slate-100 rounded w-1/3" />
+        </div>
+      </div>
+      <div className="h-2 bg-slate-100 rounded-full" />
+    </div>
+  );
+}
 
 /* ── main ── */
-export default function TeacherWorkload() {
-  const [teachers,   setTeachers]   = useState(DUMMY_TEACHERS);
-  const [workload,   setWorkload]   = useState(DUMMY_WORKLOAD);
-  const [loading,    setLoading]    = useState(false);
-  const [saving,     setSaving]     = useState(false);
-  const [filter,     setFilter]     = useState('all');
-  const [view,       setView]       = useState('cards');
-  const [modal,      setModal]      = useState(null);
-  const [editId,     setEditId]     = useState(null);
-  const [form,       setForm]       = useState(EMPTY_FORM);
-  const [errors,     setErrors]     = useState({});
-  const [delId,      setDelId]      = useState(null);
+export default function LecturerWorkload() {
+  const [lecturers, setLecturers] = useState([]);
+  const [workload,  setWorkload]  = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [isDemo,    setIsDemo]    = useState(false);
+  const [saving,    setSaving]    = useState(false);
+  const [filter,    setFilter]    = useState('all');
+  const [view,      setView]      = useState('cards');
+  const [modal,     setModal]     = useState(null);
+  const [editId,    setEditId]    = useState(null);
+  const [form,      setForm]      = useState(EMPTY_FORM);
+  const [errors,    setErrors]    = useState({});
+  const [delId,     setDelId]     = useState(null);
   const { list, dismiss, toast } = useToast();
   const firstErrRef = useRef(null);
 
+  /* ── Load real data from backend ── */
+  const loadData = useCallback(async (showToast = false) => {
+    setLoading(true);
+    try {
+      const [lecs, tts] = await Promise.all([
+        fetchLecturers().catch(e => { console.error('[LecturerWorkload] fetchLecturers:', e.message); return []; }),
+        fetchTimetables().catch(e => { console.error('[LecturerWorkload] fetchTimetables:', e.message); return []; }),
+      ]);
+      const lecsArr = normalizeArray(lecs);
+      const ttsArr  = normalizeArray(tts);
+      setLecturers(lecsArr);
+      setWorkload(calcLecturerWorkload(lecsArr, ttsArr));
+      if (showToast) toast.success('Data synced from backend', 'Synced');
+    } catch (err) {
+      console.error('[LecturerWorkload] loadData error:', err.message);
+      toast.error(`Failed to load data: ${err.message}`, 'Error');
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  /* ── Demo-data fallback (presentation only) ─────────────────────────────
+   * Fires ONLY after loading completes and real backend returned nothing.
+   * If backend later returns real data, isDemo resets to false automatically.
+   * ──────────────────────────────────────────────────────────────────────── */
+  useEffect(() => {
+    if (loading) return;           // wait for real fetch to finish
+    if (workload.length > 0) {     // real data arrived → clear demo flag
+      setIsDemo(false);
+      return;
+    }
+    // No real workload data — inject realistic presentation data
+    setIsDemo(true);
+    setWorkload([
+      { lecturerId: 'd1', lecturerName: 'Dr. Nimal',    totalHours:  7, totalMinutes:  420, totalClasses: 5,  maxWeeklyHours: 20, department: 'Computer Science',            status: 'underloaded' },
+      { lecturerId: 'd2', lecturerName: 'Jana',         totalHours: 11, totalMinutes:  660, totalClasses: 8,  maxWeeklyHours: 20, department: 'Information Technology',       status: 'optimal'     },
+      { lecturerId: 'd3', lecturerName: 'Jaysooriya',   totalHours: 14, totalMinutes:  840, totalClasses: 10, maxWeeklyHours: 20, department: 'Computer System Engineering',  status: 'optimal'     },
+      { lecturerId: 'd4', lecturerName: 'Perera',       totalHours: 17, totalMinutes: 1020, totalClasses: 12, maxWeeklyHours: 20, department: 'Computer System Networks',     status: 'optimal'     },
+      { lecturerId: 'd5', lecturerName: 'Thilani',      totalHours: 22, totalMinutes: 1320, totalClasses: 16, maxWeeklyHours: 20, department: 'Information Technology',       status: 'overloaded'  },
+    ]);
+    if (lecturers.length === 0) {
+      setLecturers([
+        { _id: 'd1', name: 'Dr. Nimal',  department: 'Computer Science',           maxWeeklyHours: 20 },
+        { _id: 'd2', name: 'Jana',        department: 'Information Technology',      maxWeeklyHours: 20 },
+        { _id: 'd3', name: 'Jaysooriya', department: 'Computer System Engineering', maxWeeklyHours: 20 },
+        { _id: 'd4', name: 'Perera',     department: 'Computer System Networks',    maxWeeklyHours: 20 },
+        { _id: 'd5', name: 'Thilani',    department: 'Information Technology',      maxWeeklyHours: 20 },
+      ]);
+    }
+  }, [loading, workload.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
   /* ── computed ── */
   const withStatus  = workload;
-  const filtered    = filter === 'all' ? withStatus : withStatus.filter(t => t.status === filter);
-  const overCount   = withStatus.filter(t => t.status === 'overloaded').length;
-  const underCount  = withStatus.filter(t => t.status === 'underloaded').length;
+  const filtered    = filter === 'all' ? withStatus : withStatus.filter(l => l.status === filter);
+  const overCount   = withStatus.filter(l => l.status === 'overloaded').length;
+  const underCount  = withStatus.filter(l => l.status === 'underloaded').length;
   const avgHours    = workload.length
-    ? (workload.reduce((a, t) => a + t.totalHours, 0) / workload.length).toFixed(1)
+    ? (workload.reduce((a, l) => a + l.totalHours, 0) / workload.length).toFixed(1)
     : '0';
 
   const STATS = [
-    { label: 'Total Faculty',      value: teachers.length,  icon: <FaUserTie />,             color: 'text-primary',   bg: 'bg-blue-100'    },
+    { label: 'Total Faculty',      value: lecturers.length, icon: <FaUserTie />,             color: 'text-primary',   bg: 'bg-blue-100'    },
     { label: 'Avg Weekly Hours',   value: `${avgHours}h`,   icon: <FaClock />,               color: 'text-indigo-500',bg: 'bg-indigo-100'  },
     { label: 'Overloaded Faculty', value: overCount,        icon: <FaExclamationTriangle />,  color: 'text-rose-500',  bg: 'bg-rose-100'    },
-    { label: 'Optimal Load',       value: withStatus.filter(t=>t.status==='optimal').length, icon: <FaCheckCircle />, color: 'text-emerald-500', bg: 'bg-emerald-100' },
+    { label: 'Optimal Load',       value: withStatus.filter(l=>l.status==='optimal').length, icon: <FaCheckCircle />, color: 'text-emerald-500', bg: 'bg-emerald-100' },
   ];
 
   /* ── validation ── */
   function validate(f, currentId = null) {
     const e = {};
-    if (!f.name.trim())           e.name           = 'Teacher name is required';
+    if (!f.name.trim())           e.name           = 'Lecturer name is required';
     if (!f.department)            e.department     = 'Department is required';
     if (!f.maxWeeklyHours || Number(f.maxWeeklyHours) <= 0) e.maxWeeklyHours = 'Max weekly hours must be > 0';
-    const dup = teachers.find(t =>
-      String(t._id) !== String(currentId) &&
-      (t.name || '').trim().toLowerCase() === f.name.trim().toLowerCase()
+    const dup = lecturers.find(l =>
+      String(l._id) !== String(currentId) &&
+      (l.name || '').trim().toLowerCase() === f.name.trim().toLowerCase()
     );
-    if (dup) e.name = 'A teacher with this name already exists';
+    if (dup) e.name = 'A lecturer with this name already exists';
     return e;
   }
 
@@ -210,86 +265,111 @@ export default function TeacherWorkload() {
   function openAdd() {
     setForm(EMPTY_FORM); setErrors({}); setEditId(null); setModal('add');
   }
-  function openEdit(t) {
+  function openEdit(l) {
     setForm({
-      name:           t.teacherName || '',
-      department:     t.department  || '',
+      name:           l.lecturerName || l.name || '',
+      department:     l.department   || '',
       subjects:       '',
-      maxWeeklyHours: String(t.maxWeeklyHours || 20),
+      maxWeeklyHours: String(l.maxWeeklyHours || 20),
     });
     setErrors({});
-    setEditId(t.teacherId || '');
+    setEditId(l.lecturerId || l._id || '');
     setModal('edit');
   }
 
-  /* ── CREATE (local only) ── */
-  function handleCreate() {
+  /* ── CREATE — calls backend API ── */
+  async function handleCreate() {
     const e = validate(form);
     if (Object.keys(e).length) {
       setErrors(e);
       setTimeout(() => firstErrRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
       return;
     }
-    const newId = 't' + Date.now();
-    const maxHrs = Number(form.maxWeeklyHours);
-    const hours = Math.floor(Math.random() * maxHrs * 0.9) + Math.floor(maxHrs * 0.4);
-    const status = hours > maxHrs ? 'overloaded' : hours >= maxHrs * 0.6 ? 'optimal' : 'underloaded';
-    const newTeacher = { _id: newId, name: form.name.trim(), department: form.department, maxWeeklyHours: maxHrs };
-    const newEntry   = { teacherId: newId, teacherName: form.name.trim(), department: form.department, totalHours: hours, maxWeeklyHours: maxHrs, status };
-    setTeachers(p => [...p, newTeacher]);
-    setWorkload(p => [...p, newEntry]);
-    setModal(null);
-    toast.success(`${form.name.trim()} added successfully`, 'Success');
+    setSaving(true);
+    try {
+      const payload = {
+        name:           form.name.trim(),
+        department:     form.department,
+        subjects:       form.subjects ? form.subjects.split(',').map(s => s.trim()).filter(Boolean) : [],
+        maxWeeklyHours: Number(form.maxWeeklyHours),
+      };
+      await createLecturer(payload);
+      setModal(null);
+      toast.success(`${form.name.trim()} added successfully`, 'Success');
+      await loadData();
+    } catch (err) {
+      console.error('[LecturerWorkload] createLecturer error:', err.message);
+      toast.error(`Failed to add lecturer: ${err.message}`, 'Error');
+    } finally {
+      setSaving(false);
+    }
   }
 
-  /* ── UPDATE (local only) ── */
-  function handleUpdate() {
+  /* ── UPDATE — calls backend API ── */
+  async function handleUpdate() {
     const e = validate(form, editId);
     if (Object.keys(e).length) {
       setErrors(e);
       setTimeout(() => firstErrRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
       return;
     }
-    const maxHrs = Number(form.maxWeeklyHours);
-    setTeachers(p => p.map(t => t._id === editId ? { ...t, name: form.name.trim(), department: form.department, maxWeeklyHours: maxHrs } : t));
-    setWorkload(p => p.map(w => {
-      if (w.teacherId !== editId) return w;
-      const status = w.totalHours > maxHrs ? 'overloaded' : w.totalHours >= maxHrs * 0.6 ? 'optimal' : 'underloaded';
-      return { ...w, teacherName: form.name.trim(), department: form.department, maxWeeklyHours: maxHrs, status };
-    }));
-    setModal(null);
-    toast.success('Teacher updated successfully', 'Success');
+    setSaving(true);
+    try {
+      const payload = {
+        name:           form.name.trim(),
+        department:     form.department,
+        maxWeeklyHours: Number(form.maxWeeklyHours),
+      };
+      await updateLecturer(editId, payload);
+      setModal(null);
+      toast.success('Lecturer updated successfully', 'Success');
+      await loadData();
+    } catch (err) {
+      console.error('[LecturerWorkload] updateLecturer error:', err.message);
+      toast.error(`Failed to update lecturer: ${err.message}`, 'Error');
+    } finally {
+      setSaving(false);
+    }
   }
 
-  /* ── DELETE (local only) ── */
-  function handleDelete() {
-    setTeachers(p => p.filter(t => t._id !== delId));
-    setWorkload(p => p.filter(w => w.teacherId !== delId));
-    setDelId(null);
-    toast.success('Teacher deleted successfully', 'Success');
+  /* ── DELETE — calls backend API ── */
+  async function handleDelete() {
+    setSaving(true);
+    try {
+      await deleteLecturer(delId);
+      setDelId(null);
+      toast.success('Lecturer deleted successfully', 'Success');
+      await loadData();
+    } catch (err) {
+      console.error('[LecturerWorkload] deleteLecturer error:', err.message);
+      toast.error(`Failed to delete lecturer: ${err.message}`, 'Error');
+      setDelId(null);
+    } finally {
+      setSaving(false);
+    }
   }
 
   function changeFilter(k) {
     setFilter(k);
-    if (k === 'overloaded'  && overCount  > 0) toast.warning(`${overCount} overloaded teacher(s)`, 'Warning');
-    if (k === 'underloaded' && underCount > 0) toast.warning(`${underCount} under-loaded teacher(s)`, 'Warning');
+    if (k === 'overloaded'  && overCount  > 0) toast.warning(`${overCount} overloaded lecturer(s)`, 'Warning');
+    if (k === 'underloaded' && underCount > 0) toast.warning(`${underCount} under-loaded lecturer(s)`, 'Warning');
   }
 
   /* ── AI suggestions ── */
   const suggestions = (() => {
     const out = [];
-    withStatus.filter(t => t.status === 'overloaded').forEach(t => {
+    withStatus.filter(l => l.status === 'overloaded').forEach(l => {
       out.push({
         icon: <FaExclamationTriangle />, color: 'from-rose-500 to-rose-400', bg: 'bg-rose-50 border-rose-100',
-        title: `${t.teacherName} is overloaded`,
-        desc: `${t.totalHours}h assigned — ${(t.totalHours - t.maxWeeklyHours).toFixed(1)}h above limit. Consider redistributing subjects.`,
+        title: `${l.lecturerName} is overloaded`,
+        desc: `${l.totalHours}h assigned — ${(l.totalHours - l.maxWeeklyHours).toFixed(1)}h above limit. Consider redistributing subjects.`,
       });
     });
-    withStatus.filter(t => t.status === 'underloaded').forEach(t => {
+    withStatus.filter(l => l.status === 'underloaded').forEach(l => {
       out.push({
         icon: <FaLightbulb />, color: 'from-amber-500 to-orange-500', bg: 'bg-amber-50 border-amber-100',
-        title: `${t.teacherName} has spare capacity`,
-        desc: `Only ${t.totalHours}h assigned out of ${t.maxWeeklyHours}h. Consider assigning additional subjects.`,
+        title: `${l.lecturerName} has spare capacity`,
+        desc: `Only ${l.totalHours}h assigned out of ${l.maxWeeklyHours}h. Consider assigning additional subjects.`,
       });
     });
     if (!out.length) out.push({
@@ -318,17 +398,17 @@ export default function TeacherWorkload() {
           <FaArrowLeft className="text-xs" /> Analytics
         </Link>
         <span className="text-slate-300">/</span>
-        <span className="text-sm font-semibold">Teacher Workload Analytics</span>
+        <span className="text-sm font-semibold">Lecturer Workload Analytics</span>
         <div className="ml-auto flex items-center gap-2 flex-wrap">
           <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-bold">
             <button onClick={() => setView('cards')} className={`px-3 py-1.5 transition-colors ${view==='cards'?'bg-primary text-white':'bg-white text-muted hover:bg-slate-50'}`}>Cards</button>
             <button onClick={() => setView('table')} className={`px-3 py-1.5 transition-colors ${view==='table'?'bg-primary text-white':'bg-white text-muted hover:bg-slate-50'}`}>Table</button>
           </div>
-          <button id="btn-sync" onClick={() => {}} title="Refresh" className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-full bg-slate-100 text-muted hover:bg-slate-200 transition-all">
-            <FaSync className="text-[10px]" /> Sync
+          <button id="btn-sync" onClick={() => loadData(true)} title="Refresh" className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-full bg-slate-100 text-muted hover:bg-slate-200 transition-all" disabled={loading}>
+            {loading ? <FaSpinner className="animate-spin-slow text-[10px]" /> : <FaSync className="text-[10px]" />} Sync
           </button>
-          <button id="btn-add-teacher" onClick={openAdd} className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-full bg-primary text-white hover:bg-primary/90 transition-all shadow-sm">
-            <FaPlus className="text-[10px]" /> Add Teacher
+          <button id="btn-add-lecturer" onClick={openAdd} className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-full bg-primary text-white hover:bg-primary/90 transition-all shadow-sm">
+            <FaPlus className="text-[10px]" /> Add Lecturer
           </button>
         </div>
       </header>
@@ -337,10 +417,17 @@ export default function TeacherWorkload() {
 
         <Reveal>
           <h1 className="text-3xl sm:text-4xl font-extrabold leading-tight">
-            Teacher Workload{' '}
+            Lecturer Workload{' '}
             <span className="bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">Analytics</span>
           </h1>
-          <p className="mt-2 text-muted text-lg">Monitor teaching hours and identify overloaded faculty. Rebalance workloads with ease.</p>
+          <p className="mt-2 text-muted text-lg flex items-center gap-2">
+            Monitor teaching hours and identify overloaded faculty. Rebalance workloads with ease.
+            {isDemo && (
+              <span className="inline-block text-[11px] font-semibold text-slate-400 opacity-60 border border-slate-200 rounded-full px-2 py-0.5 ml-1">
+                Sample Data · Demo
+              </span>
+            )}
+          </p>
         </Reveal>
 
         {/* stats */}
@@ -364,13 +451,20 @@ export default function TeacherWorkload() {
             <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
               <div>
                 <h2 className="text-xl font-extrabold">Teaching Hours per Faculty</h2>
-                <p className="text-sm text-muted mt-0.5">Based on sample timetable entries</p>
+                <p className="text-sm text-muted mt-0.5">
+                {loading
+                  ? 'Loading from backend…'
+                  : isDemo
+                    ? <span className="text-amber-500 font-medium">Demo data shown — no backend data available</span>
+                    : `${workload.length} lecturer(s) — live data from backend`
+                }
+              </p>
               </div>
               <div className="flex gap-2 flex-wrap">
                 {[
                   { k:'all',        l:'All',       c: withStatus.length },
                   { k:'overloaded', l:'Overloaded', c: overCount },
-                  { k:'optimal',    l:'Optimal',    c: withStatus.filter(t=>t.status==='optimal').length },
+                  { k:'optimal',    l:'Optimal',    c: withStatus.filter(l=>l.status==='optimal').length },
                   { k:'underloaded',l:'Under-load', c: underCount },
                 ].map(f => (
                   <button key={f.k} id={`filter-${f.k}`} onClick={() => changeFilter(f.k)}
@@ -381,36 +475,44 @@ export default function TeacherWorkload() {
               </div>
             </div>
 
-            {filtered.length === 0 ? (
-              <div className="py-12 text-center text-muted text-sm">No teachers match this filter.</div>
+            {loading ? (
+              <div className="grid gap-4">
+                {[1,2,3].map(i => <LoadingCard key={i} />)}
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="py-12 text-center text-muted text-sm">
+                {workload.length === 0
+                  ? 'No lecturers found in the database. Add some using the "Add Lecturer" button.'
+                  : 'No lecturers match this filter.'}
+              </div>
             ) : view === 'cards' ? (
               <div className="grid gap-4">
-                {filtered.map((t, i) => {
-                  const meta = STATUS_META[t.status];
+                {filtered.map((l, i) => {
+                  const meta = STATUS_META[l.status];
                   return (
-                    <div key={t.teacherId} id={`tc-${t.teacherId}`} className={cardCls(t.status)}>
+                    <div key={l.lecturerId || i} id={`lc-${l.lecturerId}`} className={cardCls(l.status)}>
                       <div className="flex flex-wrap items-start gap-3 mb-3">
-                        <div className={`w-10 h-10 rounded-xl text-white flex items-center justify-center text-sm font-bold flex-shrink-0 bg-gradient-to-br ${getAvatarGradient(t.status, i)}`}>
-                          {t.teacherName.split(' ').map(w=>w[0]).slice(0,2).join('')}
+                        <div className={`w-10 h-10 rounded-xl text-white flex items-center justify-center text-sm font-bold flex-shrink-0 bg-gradient-to-br ${getAvatarGradient(l.status, i)}`}>
+                          {(l.lecturerName || '').split(' ').map(w=>w[0]).slice(0,2).join('')}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-bold text-sm">{t.teacherName}</span>
+                            <span className="font-bold text-sm">{l.lecturerName}</span>
                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${meta.cls}`}>{meta.label}</span>
                           </div>
-                          <div className="text-xs text-muted mt-0.5">{t.department}</div>
+                          <div className="text-xs text-muted mt-0.5">{l.department}</div>
                         </div>
-                        {t.status === 'overloaded' && (
+                        {l.status === 'overloaded' && (
                           <div className="flex items-center gap-1 text-xs font-bold text-rose-500 bg-rose-50 border border-rose-100 rounded-lg px-2 py-1">
-                            <FaExclamationTriangle className="text-[10px]" />+{(t.totalHours - t.maxWeeklyHours).toFixed(1)}h over
+                            <FaExclamationTriangle className="text-[10px]" />+{(l.totalHours - l.maxWeeklyHours).toFixed(1)}h over
                           </div>
                         )}
                         <div className="flex gap-1.5">
-                          <button id={`edit-${t.teacherId}`} onClick={() => openEdit(t)} className="w-8 h-8 rounded-lg bg-blue-50 text-primary hover:bg-blue-100 flex items-center justify-center transition-colors" title="Edit"><FaEdit className="text-xs" /></button>
-                          <button id={`del-${t.teacherId}`}  onClick={() => setDelId(t.teacherId)} className="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 flex items-center justify-center transition-colors" title="Delete"><FaTrash className="text-xs" /></button>
+                          <button id={`edit-${l.lecturerId}`} onClick={() => openEdit(l)} className="w-8 h-8 rounded-lg bg-blue-50 text-primary hover:bg-blue-100 flex items-center justify-center transition-colors" title="Edit"><FaEdit className="text-xs" /></button>
+                          <button id={`del-${l.lecturerId}`}  onClick={() => setDelId(l.lecturerId || l._id)} className="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 flex items-center justify-center transition-colors" title="Delete"><FaTrash className="text-xs" /></button>
                         </div>
                       </div>
-                      <HoursBar hours={t.totalHours} max={t.maxWeeklyHours} />
+                      <HoursBar hours={l.totalHours} max={l.maxWeeklyHours} />
                     </div>
                   );
                 })}
@@ -422,25 +524,25 @@ export default function TeacherWorkload() {
                   <table className="w-full text-sm">
                     <thead className="bg-slate-50 border-b border-slate-100">
                       <tr>
-                        {['Teacher','Department','Hours','Max Hrs','Status','Actions'].map(h => (
+                        {['Lecturer','Department','Hours','Max Hrs','Status','Actions'].map(h => (
                           <th key={h} className="text-left text-[10px] font-extrabold uppercase tracking-widest text-muted px-4 py-3">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                      {filtered.map(t => {
-                        const meta = STATUS_META[t.status];
+                      {filtered.map((l, i) => {
+                        const meta = STATUS_META[l.status];
                         return (
-                          <tr key={t.teacherId} className={`hover:bg-slate-50 transition-colors ${t.status==='overloaded'?'bg-rose-50/30':t.status==='underloaded'?'bg-amber-50/30':''}`}>
-                            <td className="px-4 py-3 font-semibold whitespace-nowrap">{t.teacherName}</td>
-                            <td className="px-4 py-3 text-xs text-muted">{t.department}</td>
-                            <td className="px-4 py-3"><span className={`text-xs font-bold ${t.totalHours>t.maxWeeklyHours?'text-rose-500':'text-emerald-600'}`}>{t.totalHours}h</span></td>
-                            <td className="px-4 py-3 text-xs text-muted">{t.maxWeeklyHours}h</td>
+                          <tr key={l.lecturerId || i} className={`hover:bg-slate-50 transition-colors ${l.status==='overloaded'?'bg-rose-50/30':l.status==='underloaded'?'bg-amber-50/30':''}`}>
+                            <td className="px-4 py-3 font-semibold whitespace-nowrap">{l.lecturerName}</td>
+                            <td className="px-4 py-3 text-xs text-muted">{l.department}</td>
+                            <td className="px-4 py-3"><span className={`text-xs font-bold ${l.totalHours>l.maxWeeklyHours?'text-rose-500':'text-emerald-600'}`}>{l.totalHours}h</span></td>
+                            <td className="px-4 py-3 text-xs text-muted">{l.maxWeeklyHours}h</td>
                             <td className="px-4 py-3"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${meta.cls}`}>{meta.label}</span></td>
                             <td className="px-4 py-3">
                               <div className="flex gap-1.5">
-                                <button onClick={() => openEdit(t)} className="w-7 h-7 rounded-lg bg-blue-50 text-primary hover:bg-blue-100 flex items-center justify-center transition-colors"><FaEdit className="text-[10px]" /></button>
-                                <button onClick={() => setDelId(t.teacherId)} className="w-7 h-7 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 flex items-center justify-center transition-colors"><FaTrash className="text-[10px]" /></button>
+                                <button onClick={() => openEdit(l)} className="w-7 h-7 rounded-lg bg-blue-50 text-primary hover:bg-blue-100 flex items-center justify-center transition-colors"><FaEdit className="text-[10px]" /></button>
+                                <button onClick={() => setDelId(l.lecturerId || l._id)} className="w-7 h-7 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 flex items-center justify-center transition-colors"><FaTrash className="text-[10px]" /></button>
                               </div>
                             </td>
                           </tr>
@@ -455,45 +557,47 @@ export default function TeacherWorkload() {
         </Reveal>
 
         {/* weekly bar chart */}
-        <Reveal>
-          <section className="bg-white rounded-3xl border border-slate-100 shadow-xl p-6 sm:p-8">
-            <h2 className="text-xl font-extrabold mb-1">Weekly Workload Comparison</h2>
-            <p className="text-sm text-muted mb-6">Teaching hours vs max weekly limit</p>
-            <div className="flex items-end gap-2 h-44 overflow-x-auto">
-              {withStatus.map((t, i) => (
-                <div key={t.teacherId} className="flex-1 min-w-[52px] flex flex-col items-center gap-1">
-                  <div className="w-full flex items-end h-36">
-                    <div
-                      className="w-full rounded-t-md transition-all duration-700 hover:opacity-80"
-                      style={{
-                        height: `${Math.min(((t.totalHours) / (t.maxWeeklyHours * 1.4)) * 100, 100)}%`,
-                        minHeight: '4px',
-                        backgroundColor: getBarColor(t.status, i),
-                      }}
-                      title={`${t.teacherName}: ${t.totalHours}h`}
-                    />
+        {workload.length > 0 && (
+          <Reveal>
+            <section className="bg-white rounded-3xl border border-slate-100 shadow-xl p-6 sm:p-8">
+              <h2 className="text-xl font-extrabold mb-1">Weekly Workload Comparison</h2>
+              <p className="text-sm text-muted mb-6">Teaching hours vs max weekly limit</p>
+              <div className="flex items-end gap-2 h-44 overflow-x-auto">
+                {withStatus.map((l, i) => (
+                  <div key={l.lecturerId || i} className="flex-1 min-w-[52px] flex flex-col items-center gap-1">
+                    <div className="w-full flex items-end h-36">
+                      <div
+                        className="w-full rounded-t-md transition-all duration-700 hover:opacity-80"
+                        style={{
+                          height: `${Math.min(((l.totalHours) / (l.maxWeeklyHours * 1.4)) * 100, 100)}%`,
+                          minHeight: '4px',
+                          backgroundColor: getBarColor(l.status, i),
+                        }}
+                        title={`${l.lecturerName}: ${l.totalHours}h`}
+                      />
+                    </div>
+                    <span className="text-[8px] font-semibold text-muted text-center leading-tight">{(l.lecturerName || '').split(' ')[0]}</span>
                   </div>
-                  <span className="text-[8px] font-semibold text-muted text-center leading-tight">{t.teacherName.split(' ')[0]}</span>
-                </div>
-              ))}
-            </div>
-          </section>
-        </Reveal>
+                ))}
+              </div>
+            </section>
+          </Reveal>
+        )}
 
         {/* overloaded alerts */}
         {overCount > 0 && (
           <Reveal>
             <section>
-              <h2 className="text-xl font-extrabold mb-4"><FaExclamationTriangle className="inline text-rose-500 mr-2" />Overloaded Teacher Alerts</h2>
+              <h2 className="text-xl font-extrabold mb-4"><FaExclamationTriangle className="inline text-rose-500 mr-2" />Overloaded Lecturer Alerts</h2>
               <div className="grid sm:grid-cols-2 gap-4">
-                {withStatus.filter(t=>t.status==='overloaded').map((t,i) => (
-                  <Reveal key={t.teacherId} delay={`${i*80}ms`}>
+                {withStatus.filter(l=>l.status==='overloaded').map((l,i) => (
+                  <Reveal key={l.lecturerId || i} delay={`${i*80}ms`}>
                     <div className="bg-rose-50 border border-rose-200 rounded-2xl p-5">
                       <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-rose-400 text-white flex items-center justify-center text-sm font-bold">{t.teacherName.split(' ').map(w=>w[0]).slice(0,2).join('')}</div>
-                        <div><div className="font-bold text-sm">{t.teacherName}</div><div className="text-xs text-muted">{t.department}</div></div>
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-rose-400 text-white flex items-center justify-center text-sm font-bold">{(l.lecturerName || '').split(' ').map(w=>w[0]).slice(0,2).join('')}</div>
+                        <div><div className="font-bold text-sm">{l.lecturerName}</div><div className="text-xs text-muted">{l.department}</div></div>
                       </div>
-                      <div className="text-sm text-rose-700 font-semibold mb-1">⚠ {t.totalHours}h — {(t.totalHours-t.maxWeeklyHours).toFixed(1)}h above limit</div>
+                      <div className="text-sm text-rose-700 font-semibold mb-1">⚠ {l.totalHours}h — {(l.totalHours-l.maxWeeklyHours).toFixed(1)}h above limit</div>
                       <div className="mt-2 text-[11px] font-bold text-rose-500 bg-rose-100 border border-rose-200 rounded-lg px-3 py-1.5 inline-block">Action Required: Reassign or reduce load</div>
                     </div>
                   </Reveal>
@@ -507,7 +611,7 @@ export default function TeacherWorkload() {
         <Reveal>
           <section className="pb-10">
             <h2 className="text-xl font-extrabold mb-1">AI Workload Insights</h2>
-            <p className="text-sm text-muted mb-6">Recommendations based on sample timetable data.</p>
+            <p className="text-sm text-muted mb-6">Recommendations based on live timetable data from backend.</p>
             <div className="grid gap-4">
               {suggestions.map((s,i) => (
                 <Reveal key={i} delay={`${i*80}ms`}>
@@ -527,7 +631,7 @@ export default function TeacherWorkload() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/50 backdrop-blur-sm" onClick={e => { if(e.target===e.currentTarget) setModal(null); }}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100">
-              <h3 className="text-lg font-extrabold">{modal==='add'?'+ Add Teacher':'✎ Edit Teacher'}</h3>
+              <h3 className="text-lg font-extrabold">{modal==='add'?'+ Add Lecturer':'✎ Edit Lecturer'}</h3>
               <button onClick={() => setModal(null)} className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center"><FaTimes className="text-xs" /></button>
             </div>
             <div className="px-6 py-5 space-y-4" ref={firstErrRef}>
@@ -587,7 +691,7 @@ export default function TeacherWorkload() {
                 className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-extrabold rounded-lg bg-primary text-white hover:bg-primary/90 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {saving ? <FaSpinner className="animate-spin-slow text-[10px]" /> : <FaSave className="text-[10px]" />}
-                {saving ? 'Saving…' : (modal==='add'?'Add Teacher':'Save Changes')}
+                {saving ? 'Saving…' : (modal==='add'?'Add Lecturer':'Save Changes')}
               </button>
             </div>
           </div>
@@ -606,7 +710,7 @@ export default function TeacherWorkload() {
               </div>
             </div>
             <p className="text-sm text-slate-600 mb-5">
-              Delete <strong>{teachers.find(t => String(t._id) === String(delId))?.name || 'this teacher'}</strong> from the system?
+              Delete <strong>{lecturers.find(l => String(l._id) === String(delId) || String(l.lecturerId) === String(delId))?.name || 'this lecturer'}</strong> from the system?
             </p>
             <div className="flex gap-3 justify-end">
               <button onClick={() => setDelId(null)} className="px-4 py-2 text-xs font-bold rounded-lg border border-slate-200 text-muted hover:bg-slate-50">Cancel</button>

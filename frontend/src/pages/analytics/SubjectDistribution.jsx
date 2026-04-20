@@ -5,8 +5,10 @@ import {
   FaTimes, FaEdit, FaTrash, FaCheckCircle, FaTimesCircle, FaPlus, FaSave, FaSync, FaSpinner,
 } from 'react-icons/fa';
 import { HiSparkles } from 'react-icons/hi2';
-
-/* ── DEMO MODE: Pure dummy data – no backend required ── */
+import {
+  fetchSubjects, fetchTimetables, calcSubjectDistribution,
+  createSubject, updateSubject, deleteSubject, normalizeArray,
+} from '../../services/analyticsService';
 
 /* ── reveal ── */
 function useReveal() {
@@ -205,29 +207,48 @@ function SubjectModal({ mode, initial, existing, onClose, onSubmit, saving }) {
   );
 }
 
-/* ── Dummy Data ── */
-const DUMMY_SUBJECTS = [
-  { subjectId: 's001', subjectName: 'Database Systems',      department: 'Computer Science',             weeklyHours: 4, scheduledHours: 4 },
-  { subjectId: 's002', subjectName: 'Software Engineering',  department: 'Information Technology',       weeklyHours: 3, scheduledHours: 3 },
-  { subjectId: 's003', subjectName: 'Computer Networking',   department: 'Computer System Networks',     weeklyHours: 4, scheduledHours: 5 },
-  { subjectId: 's004', subjectName: 'Object Oriented Programming', department: 'Computer Science',       weeklyHours: 3, scheduledHours: 3 },
-  { subjectId: 's005', subjectName: 'Statistics & Probability', department: 'Information Technology',   weeklyHours: 3, scheduledHours: 1 },
-  { subjectId: 's006', subjectName: 'Data Structures',       department: 'Computer Science',             weeklyHours: 4, scheduledHours: 4 },
-  { subjectId: 's007', subjectName: 'Operating Systems',     department: 'Computer System Engineering',  weeklyHours: 3, scheduledHours: 3 },
-  { subjectId: 's008', subjectName: 'Web Technologies',      department: 'Information Technology',       weeklyHours: 3, scheduledHours: 0 },
-  { subjectId: 's009', subjectName: 'Digital Logic Design',  department: 'Computer System Engineering',  weeklyHours: 4, scheduledHours: 4 },
-  { subjectId: 's010', subjectName: 'Network Security',      department: 'Computer System Networks',     weeklyHours: 3, scheduledHours: 3 },
-];
+// Real backend data is loaded via fetchSubjects and fetchTimetables
 
 /* ── main ── */
 export default function SubjectDistribution() {
-  const [subjects,   setSubjects]   = useState(DUMMY_SUBJECTS);
-  const [modal,      setModal]      = useState(null);
-  const [editTarget, setEditTarget] = useState(null);
-  const [filter,     setFilter]     = useState('all');
-  const [delId,      setDelId]      = useState(null);
-  const [saving,     setSaving]     = useState(false);
+  const [rawSubjects, setRawSubjects] = useState([]);
+  const [timetable,   setTimetable]   = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [modal,       setModal]       = useState(null);
+  const [editTarget,  setEditTarget]  = useState(null);
+  const [filter,      setFilter]      = useState('all');
+  const [delId,       setDelId]       = useState(null);
+  const [saving,      setSaving]      = useState(false);
   const { list, dismiss, toast } = useToast();
+
+  /* Load real data */
+  const loadData = useCallback(async (showToast = false) => {
+    setLoading(true);
+    try {
+      const [subjs, tts] = await Promise.all([
+        fetchSubjects().catch(() => []),
+        fetchTimetables().catch(() => []),
+      ]);
+      setRawSubjects(normalizeArray(subjs));
+      setTimetable(normalizeArray(tts));
+      if (showToast) toast.success('Data refreshed from backend', 'Synced');
+    } catch (err) {
+      toast.error(`Failed to load data: ${err.message}`, 'Error');
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  /* Build subject list with scheduled hours from timetable */
+  const subjects = calcSubjectDistribution(rawSubjects, timetable).map(s => ({
+    subjectId:     s.subjectId     || s._id,
+    subjectName:   s.subjectName   || s.name,
+    department:    s.department    || '',
+    weeklyHours:   s.weeklyHours   || 0,
+    scheduledHours:s.scheduledHours|| 0,
+  }));
 
   /* ── derived ── */
   const withStatus = subjects.map(s => ({ ...s, status: getStatus(s) }));
@@ -239,37 +260,52 @@ export default function SubjectDistribution() {
   ).sort((a, b) => b[1] - a[1]);
   const maxDept = Math.max(...deptTotals.map(d => d[1]), 1);
 
-  /* ── CRUD (local only) ── */
+  /* ── CRUD (calls backend API) ── */
   function openAdd()  { setEditTarget(null); setModal('add');  toast.info('Fill in subject details', 'Info', 2500); }
   function openEdit(s){ setEditTarget(s);    setModal('edit'); toast.info(`Editing "${s.subjectName}"`, 'Info', 2500); }
 
-  function handleAdd(payload) {
-    const newId = 's' + Date.now();
-    const scheduled = Math.round(payload.weeklyHours * (0.5 + Math.random() * 0.6));
-    setSubjects(p => [...p, {
-      subjectId: newId,
-      subjectName: payload.name,
-      department: payload.department,
-      weeklyHours: payload.weeklyHours,
-      scheduledHours: scheduled,
-    }]);
-    toast.success(`"${payload.name}" added`, 'Success');
+  async function handleAdd(payload) {
+    setSaving(true);
+    try {
+      await createSubject({ name: payload.name, department: payload.department, weeklyHours: payload.weeklyHours });
+      toast.success(`"${payload.name}" added`, 'Success');
+      await loadData();
+    } catch (err) {
+      toast.error(`Failed to add subject: ${err.message}`, 'Error');
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function handleUpdate(payload) {
-    setSubjects(p => p.map(s => s.subjectId === payload.subjectId
-      ? { ...s, subjectName: payload.name, department: payload.department, weeklyHours: payload.weeklyHours }
-      : s
-    ));
-    toast.success(`"${payload.name}" updated`, 'Success');
+  async function handleUpdate(payload) {
+    setSaving(true);
+    try {
+      await updateSubject(payload.subjectId, { name: payload.name, department: payload.department, weeklyHours: payload.weeklyHours });
+      toast.success(`"${payload.name}" updated`, 'Success');
+      await loadData();
+    } catch (err) {
+      toast.error(`Failed to update subject: ${err.message}`, 'Error');
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function handleDelete() {
-    setSubjects(p => p.filter(s => s.subjectId !== delId));
-    setDelId(null);
-    toast.success('Subject deleted', 'Success');
+  async function handleDelete() {
+    setSaving(true);
+    try {
+      await deleteSubject(delId);
+      setDelId(null);
+      toast.success('Subject deleted', 'Success');
+      await loadData();
+    } catch (err) {
+      toast.error(`Failed to delete subject: ${err.message}`, 'Error');
+      setDelId(null);
+    } finally {
+      setSaving(false);
+    }
   }
 
+  /* modal data shape */
   const editSubjectForModal = editTarget
     ? {
         subjectId:   editTarget.subjectId,
@@ -322,8 +358,8 @@ export default function SubjectDistribution() {
         <span className="text-slate-300">/</span>
         <span className="text-sm font-semibold">Subject Distribution</span>
         <div className="ml-auto flex items-center gap-2">
-          <button onClick={() => {}} className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-full bg-slate-100 text-muted hover:bg-slate-200 transition-all">
-            <FaSync className="text-[10px]" /> Sync
+          <button onClick={() => loadData(true)} className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-full bg-slate-100 text-muted hover:bg-slate-200 transition-all" disabled={loading}>
+            {loading ? <FaSpinner className="animate-spin-slow text-[10px]" /> : <FaSync className="text-[10px]" />} Sync
           </button>
           <button id="add-subject-btn" onClick={openAdd} className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-gradient-to-r from-secondary to-violet-700 px-4 py-2 rounded-xl shadow-md hover:from-indigo-700 transition-all">
             <FaPlus className="text-[10px]" /> Add Subject
@@ -336,7 +372,7 @@ export default function SubjectDistribution() {
           <h1 className="text-3xl sm:text-4xl font-extrabold mb-2">
             Subject <span className="bg-gradient-to-r from-secondary to-accent bg-clip-text text-transparent">Distribution</span>
           </h1>
-          <p className="text-muted text-lg">Subject allocation analytics per department — based on sample data.</p>
+          <p className="text-muted text-lg">Subject allocation analytics — live data from backend.</p>
         </Reveal>
 
         {/* summary cards */}

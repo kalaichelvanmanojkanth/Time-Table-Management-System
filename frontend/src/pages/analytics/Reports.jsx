@@ -6,8 +6,11 @@ import {
   FaInfoCircle, FaFilter, FaSpinner, FaDownload,
 } from 'react-icons/fa';
 import { HiSparkles } from 'react-icons/hi2';
-
-/* ── DEMO MODE: Pure dummy data – no backend required ── */
+import {
+  fetchLecturers, fetchSubjects, fetchRooms, fetchTimetables,
+  calcLecturerWorkload, calcRoomUtilization, calcSubjectDistribution,
+  generateInsights, detectRoomConflicts, normalizeArray,
+} from '../../services/analyticsService';
 
 /* ── reveal ── */
 function useReveal() {
@@ -33,7 +36,10 @@ const T_STYLE = {
   error:   { bar: 'bg-rose-500',    icon: 'text-rose-500',    ring: 'ring-rose-100'    },
   info:    { bar: 'bg-blue-500',    icon: 'text-blue-500',    ring: 'ring-blue-100'    },
 };
-const T_ICON = { success: <FaCheckCircle />, warning: <FaExclamationTriangle />, error: <FaTimesCircle />, info: <FaInfoCircle /> };
+const T_ICON = {
+  success: <FaCheckCircle />, warning: <FaExclamationTriangle />,
+  error: <FaTimesCircle />,   info: <FaInfoCircle />,
+};
 function Toast({ t, onDismiss }) {
   const [show, setShow] = useState(false);
   const s = T_STYLE[t.type];
@@ -80,12 +86,12 @@ function useToast() {
 
 /* ── report types ── */
 const REPORT_TYPES = [
-  { id: 'workload',     label: 'Teacher Workload Report',    icon: '👨‍🏫', color: 'from-blue-600 to-primary' },
-  { id: 'subjects',     label: 'Subject Distribution Report',icon: '📚',   color: 'from-indigo-600 to-violet-700' },
-  { id: 'rooms',        label: 'Room Utilization Report',    icon: '🏫',   color: 'from-emerald-500 to-teal-600' },
-  { id: 'conflicts',    label: 'Room Conflict Report',       icon: '⚠️',   color: 'from-rose-500 to-rose-600' },
-  { id: 'insights',     label: 'AI Insights Report',         icon: '🤖',   color: 'from-amber-500 to-orange-500' },
-  { id: 'full',         label: 'Full Analytics Report',      icon: '📊',   color: 'from-slate-600 to-slate-700' },
+  { id: 'workload',  label: 'Lecturer Workload Report',  icon: '👨‍🏫', color: 'from-blue-600 to-primary' },
+  { id: 'subjects',  label: 'Subject Distribution Report',icon: '📚',   color: 'from-indigo-600 to-violet-700' },
+  { id: 'rooms',     label: 'Room Utilization Report',   icon: '🏫',   color: 'from-emerald-500 to-teal-600' },
+  { id: 'conflicts', label: 'Room Conflict Report',      icon: '⚠️',   color: 'from-rose-500 to-rose-600' },
+  { id: 'insights',  label: 'AI Insights Report',        icon: '🤖',   color: 'from-amber-500 to-orange-500' },
+  { id: 'full',      label: 'Full Analytics Report',     icon: '📊',   color: 'from-slate-600 to-slate-700' },
 ];
 
 const DEPT_OPTIONS = [
@@ -131,41 +137,6 @@ function StatusBadge({ status }) {
   return <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${MAP[status] || MAP.ok}`}>{status}</span>;
 }
 
-/* ── Dummy Data ── */
-const DUMMY_WORKLOAD = [
-  { teacherId: 't001', teacherName: 'Dr. Nimal Perera',       department: 'Information Technology',      totalHours: 24, maxWeeklyHours: 20, status: 'overloaded'  },
-  { teacherId: 't002', teacherName: 'Prof. Kasun Silva',      department: 'Computer Science',             totalHours: 18, maxWeeklyHours: 20, status: 'optimal'     },
-  { teacherId: 't003', teacherName: 'Ms. Tharushi Dias',      department: 'Computer System Engineering',  totalHours: 8,  maxWeeklyHours: 20, status: 'underloaded' },
-  { teacherId: 't004', teacherName: 'Mr. Ruwan Fernando',     department: 'Computer System Networks',     totalHours: 20, maxWeeklyHours: 20, status: 'optimal'     },
-  { teacherId: 't005', teacherName: 'Dr. Amali Jayawardena',  department: 'Computer Science',             totalHours: 22, maxWeeklyHours: 20, status: 'overloaded'  },
-  { teacherId: 't006', teacherName: 'Prof. Dinesh Mendis',    department: 'Information Technology',       totalHours: 16, maxWeeklyHours: 20, status: 'optimal'     },
-  { teacherId: 't007', teacherName: 'Ms. Sachini Bandara',    department: 'Computer System Engineering',  totalHours: 6,  maxWeeklyHours: 20, status: 'underloaded' },
-];
-
-const DUMMY_SUBJECTS = [
-  { subjectId: 's001', subjectName: 'Database Systems',           department: 'Computer Science',             weeklyHours: 4, scheduledHours: 4  },
-  { subjectId: 's002', subjectName: 'Software Engineering',       department: 'Information Technology',       weeklyHours: 3, scheduledHours: 3  },
-  { subjectId: 's003', subjectName: 'Computer Networking',        department: 'Computer System Networks',     weeklyHours: 4, scheduledHours: 5  },
-  { subjectId: 's004', subjectName: 'Object Oriented Programming',department: 'Computer Science',             weeklyHours: 3, scheduledHours: 3  },
-  { subjectId: 's005', subjectName: 'Statistics & Probability',   department: 'Information Technology',       weeklyHours: 3, scheduledHours: 1  },
-  { subjectId: 's006', subjectName: 'Data Structures',            department: 'Computer Science',             weeklyHours: 4, scheduledHours: 4  },
-  { subjectId: 's007', subjectName: 'Operating Systems',          department: 'Computer System Engineering',  weeklyHours: 3, scheduledHours: 3  },
-  { subjectId: 's008', subjectName: 'Web Technologies',           department: 'Information Technology',       weeklyHours: 3, scheduledHours: 0  },
-  { subjectId: 's009', subjectName: 'Digital Logic Design',       department: 'Computer System Engineering',  weeklyHours: 4, scheduledHours: 4  },
-  { subjectId: 's010', subjectName: 'Network Security',           department: 'Computer System Networks',     weeklyHours: 3, scheduledHours: 3  },
-];
-
-const DUMMY_ROOMS = [
-  { roomId: 'r001', roomName: 'Lab 1',       roomType: 'Computer Lab',  capacity: 40,  scheduledHours: 36, availableHours: 40, utilization: 90,  status: 'high'       },
-  { roomId: 'r002', roomName: 'Lab 2',       roomType: 'Computer Lab',  capacity: 40,  scheduledHours: 28, availableHours: 40, utilization: 70,  status: 'high'       },
-  { roomId: 'r003', roomName: 'Room A101',   roomType: 'Classroom',     capacity: 60,  scheduledHours: 20, availableHours: 40, utilization: 50,  status: 'normal'     },
-  { roomId: 'r004', roomName: 'Room B202',   roomType: 'Classroom',     capacity: 50,  scheduledHours: 40, availableHours: 40, utilization: 100, status: 'overbooked' },
-  { roomId: 'r005', roomName: 'Auditorium',  roomType: 'Seminar Hall',  capacity: 200, scheduledHours: 0,  availableHours: 40, utilization: 0,   status: 'unused'     },
-  { roomId: 'r006', roomName: 'Physics Lab', roomType: 'Physics Lab',   capacity: 30,  scheduledHours: 12, availableHours: 40, utilization: 30,  status: 'normal'     },
-];
-
-const DUMMY_TIMETABLE_COUNT = 42;
-
 function getSubjectStatus(s) {
   if (!s.weeklyHours || s.weeklyHours === 0) return 'unscheduled';
   if (s.scheduledHours > s.weeklyHours)       return 'over';
@@ -173,19 +144,17 @@ function getSubjectStatus(s) {
   return 'ok';
 }
 
-const DUMMY_INSIGHTS = [
-  { type: 'error',   icon: '⚠️', title: '2 Faculty Members Overloaded',       desc: 'Dr. Nimal Perera & Dr. Amali Jayawardena exceed their 20h weekly limit. Consider redistributing subjects.' },
-  { type: 'warning', icon: '⚡', title: 'Room B202 Fully Booked',              desc: 'Room B202 has reached 100% utilization. No additional sessions can be scheduled in this room.' },
-  { type: 'warning', icon: '💤', title: 'Auditorium Underutilized',            desc: 'The Auditorium (cap: 200) has 0 scheduled hours this week. Consider using it for large group sessions.' },
-  { type: 'warning', icon: '📚', title: 'Computer Networking Over-allocated',  desc: 'Computer Networking has 5h scheduled against a 4h weekly target.' },
-  { type: 'info',    icon: '📊', title: 'Web Technologies Not Yet Scheduled',  desc: 'Web Technologies has 0 scheduled hours. Assign a slot in the timetable to resolve this gap.' },
-  { type: 'success', icon: '✅', title: 'No Room Scheduling Conflicts',        desc: 'All rooms are free of double-booking conflicts. The timetable is conflict-free!' },
-];
-
 /* ── main ── */
 export default function Reports() {
   const [loading,    setLoading]    = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [dataLoading,setDataLoading]= useState(true);
+
+  /* ── Raw data from backend ── */
+  const [lecturers, setLecturers]   = useState([]);
+  const [subjects,  setSubjects]    = useState([]);
+  const [rooms,     setRooms]       = useState([]);
+  const [timetable, setTimetable]   = useState([]);
 
   /* ── filters ── */
   const [reportType,   setReportType]   = useState('full');
@@ -196,16 +165,45 @@ export default function Reports() {
 
   const { list, dismiss, toast } = useToast();
 
-  /* ── computed analytics (from dummy data) ── */
-  const workload    = DUMMY_WORKLOAD;
-  const roomUtil    = DUMMY_ROOMS;
-  const subjectDist = DUMMY_SUBJECTS.map(s => ({ ...s, status: getSubjectStatus(s) }));
-  const insights    = DUMMY_INSIGHTS;
+  /* ── Load real data from backend ── */
+  const loadData = useCallback(async () => {
+    setDataLoading(true);
+    try {
+      const [lecs, subjs, rms, tts] = await Promise.all([
+        fetchLecturers().catch(() => []),
+        fetchSubjects().catch(()  => []),
+        fetchRooms().catch(()     => []),
+        fetchTimetables().catch(()=> []),
+      ]);
+      setLecturers(normalizeArray(lecs));
+      setSubjects(normalizeArray(subjs));
+      setRooms(normalizeArray(rms));
+      setTimetable(normalizeArray(tts));
+    } catch (err) {
+      toast.error(`Failed to load data: ${err.message}`, 'Error');
+    } finally {
+      setDataLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  /* ── computed analytics (from REAL data) ── */
+  const workload = calcLecturerWorkload(lecturers, timetable);
+
+  const subjectDist = calcSubjectDistribution(subjects, timetable).map(s => ({
+    ...s,
+    status: getSubjectStatus(s),
+  }));
+
+  const roomUtil = calcRoomUtilization(rooms, timetable, 40);
+  const conflicts = detectRoomConflicts(timetable);
+  const insights = generateInsights(workload, roomUtil, conflicts, subjectDist);
 
   /* ── filtered data ── */
   const filteredWorkload = workload
-    .filter(t => !deptFilter || t.department === deptFilter)
-    .filter(t => statusFilter === 'all' || t.status === statusFilter);
+    .filter(l => !deptFilter || l.department === deptFilter)
+    .filter(l => statusFilter === 'all' || l.status === statusFilter);
 
   const filteredSubjects = subjectDist
     .filter(s => !deptFilter || s.department === deptFilter);
@@ -216,7 +214,7 @@ export default function Reports() {
   /* ── generate ── */
   const handleGenerate = () => {
     setGenerating(true);
-    toast.info('Generating report from sample data…', 'Info', 2000);
+    toast.info('Generating report from live data…', 'Info', 2000);
     setTimeout(() => {
       setGenerating(false);
       setGenerated(true);
@@ -260,10 +258,10 @@ export default function Reports() {
           <FaArrowLeft className="text-xs" /> Analytics
         </Link>
         <span className="text-slate-300">/</span>
-        <span className="text-sm font-semibold">Reports & Insights</span>
+        <span className="text-sm font-semibold">Reports &amp; Insights</span>
         <div className="ml-auto flex items-center gap-2 flex-wrap">
-          <button onClick={() => {}} className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-full bg-slate-100 text-muted hover:bg-slate-200">
-            <FaSync className="text-[10px]" /> Sync
+          <button onClick={loadData} disabled={dataLoading} className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-full bg-slate-100 text-muted hover:bg-slate-200">
+            {dataLoading ? <FaSpinner className="animate-spin-slow text-[10px]" /> : <FaSync className="text-[10px]" />} Sync
           </button>
           <span className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-widest uppercase text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-3 py-1">
             <HiSparkles /> Reports
@@ -278,16 +276,16 @@ export default function Reports() {
             Reports &{' '}
             <span className="bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">Insights</span>
           </h1>
-          <p className="mt-2 text-muted text-lg">Generate comprehensive analytics reports from sample timetable data.</p>
+          <p className="mt-2 text-muted text-lg">Generate comprehensive analytics reports from live timetable data.</p>
         </Reveal>
 
-        {/* db summary */}
+        {/* db summary — live data */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: 'Teachers',         value: DUMMY_WORKLOAD.length,   color: 'text-blue-600',    bg: 'bg-blue-50 border-blue-200' },
-            { label: 'Subjects',         value: DUMMY_SUBJECTS.length,   color: 'text-indigo-600',  bg: 'bg-indigo-50 border-indigo-200' },
-            { label: 'Rooms',            value: DUMMY_ROOMS.length,      color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200' },
-            { label: 'Timetable Entries',value: DUMMY_TIMETABLE_COUNT,   color: 'text-amber-600',   bg: 'bg-amber-50 border-amber-200' },
+            { label: 'Lecturers',        value: dataLoading ? '…' : lecturers.length,  color: 'text-blue-600',    bg: 'bg-blue-50 border-blue-200' },
+            { label: 'Subjects',         value: dataLoading ? '…' : subjects.length,   color: 'text-indigo-600',  bg: 'bg-indigo-50 border-indigo-200' },
+            { label: 'Rooms',            value: dataLoading ? '…' : rooms.length,      color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200' },
+            { label: 'Timetable Entries',value: dataLoading ? '…' : timetable.length,  color: 'text-amber-600',   bg: 'bg-amber-50 border-amber-200' },
           ].map((s, i) => (
             <Reveal key={s.label} delay={`${i * 60}ms`}>
               <div className={`rounded-2xl border ${s.bg} p-5 text-center`}>
@@ -298,7 +296,15 @@ export default function Reports() {
           ))}
         </div>
 
-        {/* ── Report builder ── */}
+        {/* loading notice */}
+        {dataLoading && (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex items-center gap-3 text-blue-700">
+            <FaSpinner className="animate-spin-slow flex-shrink-0" />
+            <span className="text-sm font-semibold">Loading analytics data from backend…</span>
+          </div>
+        )}
+
+        {/* Report builder */}
         <Reveal>
           <section className="bg-white rounded-3xl border border-slate-100 shadow-xl p-6 sm:p-8 print:hidden">
             <div className="flex items-center gap-2 mb-5">
@@ -306,7 +312,7 @@ export default function Reports() {
               <h2 className="text-xl font-extrabold">Report Builder</h2>
             </div>
 
-            {/* report type cards */}
+            {/* report type selector */}
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
               {REPORT_TYPES.map(rt => (
                 <button
@@ -326,9 +332,7 @@ export default function Reports() {
               <div>
                 <label className="block text-xs font-bold text-muted mb-1.5">Department Filter</label>
                 <select
-                  id="filter-dept"
-                  value={deptFilter}
-                  onChange={e => setDeptFilter(e.target.value)}
+                  id="filter-dept" value={deptFilter} onChange={e => setDeptFilter(e.target.value)}
                   className="w-full text-sm px-3 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-primary bg-white"
                 >
                   <option value="">All Departments</option>
@@ -338,9 +342,7 @@ export default function Reports() {
               <div>
                 <label className="block text-xs font-bold text-muted mb-1.5">Status Filter</label>
                 <select
-                  id="filter-status"
-                  value={statusFilter}
-                  onChange={e => setStatusFilter(e.target.value)}
+                  id="filter-status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
                   className="w-full text-sm px-3 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-primary bg-white"
                 >
                   <option value="all">All Statuses</option>
@@ -354,17 +356,11 @@ export default function Reports() {
                 </select>
               </div>
               <div className="flex items-end gap-2">
-                <button
-                  id="btn-reset-filters"
-                  onClick={resetFilters}
-                  className="flex-1 py-2.5 text-sm font-semibold border border-slate-200 rounded-xl text-muted hover:bg-slate-50 transition-colors"
-                >
-                  Reset
-                </button>
+                <button id="btn-reset-filters" onClick={resetFilters} className="flex-1 py-2.5 text-sm font-semibold border border-slate-200 rounded-xl text-muted hover:bg-slate-50 transition-colors">Reset</button>
                 <button
                   id="btn-generate-report"
                   onClick={handleGenerate}
-                  disabled={generating}
+                  disabled={generating || dataLoading}
                   className="flex-1 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl shadow-md hover:from-amber-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
                 >
                   {generating ? <FaSpinner className="animate-spin-slow text-xs" /> : <FaFileAlt className="text-xs" />}
@@ -375,7 +371,7 @@ export default function Reports() {
           </section>
         </Reveal>
 
-        {/* ── Generated report ── */}
+        {/* Generated report */}
         {generated && (
           <div ref={reportRef}>
             <Reveal>
@@ -392,26 +388,23 @@ export default function Reports() {
                       Generated: {new Date().toLocaleString()}
                       {deptFilter && ` · Dept: ${deptFilter}`}
                       {statusFilter !== 'all' && ` · Status: ${statusFilter}`}
+                      {' · '}<span className="text-emerald-600 font-semibold">Live backend data</span>
                     </p>
                   </div>
                   {/* Export buttons */}
                   <div className="flex gap-2 flex-wrap print:hidden">
-                    <button
-                      id="btn-export-pdf"
-                      onClick={exportPDF}
-                      className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl bg-rose-500 text-white hover:bg-rose-600 shadow-sm"
-                    >
+                    <button id="btn-export-pdf" onClick={exportPDF} className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl bg-rose-500 text-white hover:bg-rose-600 shadow-sm">
                       <FaFilePdf /> Export PDF
                     </button>
                     <button
-                      id="btn-export-teacher-csv"
+                      id="btn-export-lecturer-csv"
                       onClick={() => exportCSV(
-                        filteredWorkload.map(t => ({ Teacher: t.teacherName, Department: t.department, 'Scheduled Hours': t.totalHours, 'Max Hours': t.maxWeeklyHours, Status: t.status })),
-                        'teacher_workload.csv'
+                        filteredWorkload.map(l => ({ Lecturer: l.lecturerName, Department: l.department, 'Scheduled Hours': l.totalHours, 'Max Hours': l.maxWeeklyHours, Status: l.status })),
+                        'lecturer_workload.csv'
                       )}
                       className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
                     >
-                      <FaFileExcel /> Teacher CSV
+                      <FaFileExcel /> Lecturer CSV
                     </button>
                     <button
                       id="btn-export-room-csv"
@@ -426,23 +419,23 @@ export default function Reports() {
                   </div>
                 </div>
 
-                {/* ── Teacher Workload section ── */}
+                {/* ── Lecturer Workload section ── */}
                 {['workload','full'].includes(reportType) && (
                   <div className="mb-8">
                     <h3 className="font-extrabold text-base mb-3 flex items-center gap-2">
-                      <span className="text-xl">👨‍🏫</span> Teacher Workload
+                      <span className="text-xl">👨‍🏫</span> Lecturer Workload
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-600">{filteredWorkload.length} records</span>
                     </h3>
                     <Table
-                      headers={['Teacher','Department','Scheduled Hrs','Max Hrs','Status']}
-                      rows={filteredWorkload.map(t => [
-                        <span className="font-semibold">{t.teacherName}</span>,
-                        t.department,
-                        <span className={t.totalHours > t.maxWeeklyHours ? 'text-rose-500 font-bold' : 'text-emerald-600 font-bold'}>{t.totalHours}h</span>,
-                        `${t.maxWeeklyHours}h`,
-                        <StatusBadge status={t.status} />,
+                      headers={['Lecturer','Department','Scheduled Hrs','Max Hrs','Status']}
+                      rows={filteredWorkload.map(l => [
+                        <span className="font-semibold">{l.lecturerName}</span>,
+                        l.department,
+                        <span className={l.totalHours > l.maxWeeklyHours ? 'text-rose-500 font-bold' : 'text-emerald-600 font-bold'}>{l.totalHours}h</span>,
+                        `${l.maxWeeklyHours}h`,
+                        <StatusBadge status={l.status} />,
                       ])}
-                      emptyMsg="No teacher workload data matching filters"
+                      emptyMsg="No lecturer workload data matching filters"
                     />
                   </div>
                 )}
@@ -495,11 +488,23 @@ export default function Reports() {
                   <div className="mb-8">
                     <h3 className="font-extrabold text-base mb-3 flex items-center gap-2">
                       <span className="text-xl">⚠️</span> Room Conflicts
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-600">0 conflicts</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${conflicts.length > 0 ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'}`}>{conflicts.length} conflict{conflicts.length !== 1 ? 's' : ''}</span>
                     </h3>
-                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-emerald-700 text-sm font-semibold flex items-center gap-2">
-                      <FaCheckCircle /> No room conflicts detected — timetable is clean!
-                    </div>
+                    {conflicts.length === 0 ? (
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-emerald-700 text-sm font-semibold flex items-center gap-2">
+                        <FaCheckCircle /> No room conflicts detected — timetable is conflict-free!
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {conflicts.map((c, i) => (
+                          <div key={i} className="bg-rose-50 border border-rose-200 rounded-xl p-4">
+                            <p className="font-bold text-sm text-rose-700 mb-1">
+                              {c.roomName} on {c.day} — {c.conflicts.length} overlap{c.conflicts.length !== 1 ? 's' : ''}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -539,6 +544,9 @@ export default function Reports() {
               <FaFileAlt className="text-5xl mx-auto mb-4 text-slate-300" />
               <p className="font-bold text-lg">No report generated yet</p>
               <p className="text-sm mt-1">Select a report type, apply optional filters, then click <strong>Generate</strong>.</p>
+              {!dataLoading && lecturers.length === 0 && subjects.length === 0 && (
+                <p className="text-xs mt-3 text-amber-600">⚠ No data found in backend — add lecturers, subjects, and timetable entries first.</p>
+              )}
             </div>
           </Reveal>
         )}

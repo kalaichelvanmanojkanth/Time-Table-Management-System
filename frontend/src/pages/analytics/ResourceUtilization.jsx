@@ -5,8 +5,10 @@ import {
   FaTimes, FaTimesCircle, FaInfoCircle, FaPlus, FaEdit, FaTrash, FaSave, FaSync, FaSpinner,
 } from 'react-icons/fa';
 import { HiSparkles } from 'react-icons/hi2';
-
-/* ── DEMO MODE: Pure dummy data – no backend required ── */
+import {
+  fetchRooms, fetchTimetables, calcRoomUtilization,
+  createRoom, updateRoom, deleteRoom, normalizeArray,
+} from '../../services/analyticsService';
 
 /* ── reveal ── */
 function useReveal() {
@@ -82,6 +84,23 @@ function useToast() {
 const ROOM_TYPES = ['Classroom', 'Computer Lab', 'Physics Lab', 'Seminar Hall'];
 const EMPTY_FORM  = { name: '', type: '', capacity: '', status: 'available' };
 const AVAILABLE_HRS = 40;
+
+/* ───────────────────────────────────────────────────────────────
+   ROOM_USAGE_DEMO — single source of truth for presentation mode.
+   Used as initial state AND displayed in every room-related section:
+   progress bars, summary cards, All Rooms list, filter pills.
+   loadData() will only override this if the backend returns rooms
+   with real non-zero utilization (i.e. matched timetable data).
+─────────────────────────────────────────────────────────────── */
+const ROOM_USAGE_DEMO = [
+  { roomId: '1', roomName: 'labA402', roomType: 'Lecture Hall', capacity: 40, scheduledHours: 23, availableHours: 40, utilization: 58, status: 'normal'     },
+  { roomId: '2', roomName: 'G1304',   roomType: 'Lecture Hall', capacity: 40, scheduledHours: 27, availableHours: 40, utilization: 67, status: 'normal'     },
+  { roomId: '3', roomName: 'B405',    roomType: 'Lecture Hall', capacity: 40, scheduledHours: 29, availableHours: 40, utilization: 73, status: 'high'       },
+  { roomId: '4', roomName: 'B401',    roomType: 'Lecture Hall', capacity: 40, scheduledHours: 33, availableHours: 40, utilization: 82, status: 'overbooked' },
+  { roomId: '5', roomName: 'AB402',   roomType: 'Lecture Hall', capacity: 40, scheduledHours: 20, availableHours: 40, utilization: 49, status: 'normal'     },
+  { roomId: '6', roomName: 'A403',    roomType: 'Lecture Hall', capacity: 40, scheduledHours: 24, availableHours: 40, utilization: 61, status: 'normal'     },
+  { roomId: '7', roomName: 'A402',    roomType: 'Lecture Hall', capacity: 40, scheduledHours: 30, availableHours: 40, utilization: 76, status: 'high'       },
+];
 
 const ROOM_STATUS_META = {
   overbooked: { label: 'Overbooked', cls: 'bg-rose-100 text-rose-600 border border-rose-200' },
@@ -197,16 +216,9 @@ function RoomModal({ mode, initial, rooms, onClose, onSubmit, saving }) {
   );
 }
 
-/* ── Dummy Data ── */
-const DUMMY_ROOMS = [
-  { roomId: 'r001', roomName: 'Lab 1',       roomType: 'Computer Lab',  capacity: 40, scheduledHours: 36, availableHours: AVAILABLE_HRS },
-  { roomId: 'r002', roomName: 'Lab 2',       roomType: 'Computer Lab',  capacity: 40, scheduledHours: 28, availableHours: AVAILABLE_HRS },
-  { roomId: 'r003', roomName: 'Room A101',   roomType: 'Classroom',     capacity: 60, scheduledHours: 20, availableHours: AVAILABLE_HRS },
-  { roomId: 'r004', roomName: 'Room B202',   roomType: 'Classroom',     capacity: 50, scheduledHours: 40, availableHours: AVAILABLE_HRS },
-  { roomId: 'r005', roomName: 'Auditorium',  roomType: 'Seminar Hall',  capacity: 200, scheduledHours: 0, availableHours: AVAILABLE_HRS },
-  { roomId: 'r006', roomName: 'Physics Lab', roomType: 'Physics Lab',   capacity: 30, scheduledHours: 12, availableHours: AVAILABLE_HRS },
-];
+// Real data loaded via fetchRooms and fetchTimetables
 
+// enrichRooms kept for reference but demo data has pre-computed utilization
 function enrichRooms(rooms) {
   return rooms.map(r => {
     const utilization = Math.min(Math.round((r.scheduledHours / r.availableHours) * 100), 100);
@@ -216,13 +228,56 @@ function enrichRooms(rooms) {
 
 /* ── main ── */
 export default function ResourceUtilization() {
-  const [rooms,      setRooms]     = useState(enrichRooms(DUMMY_ROOMS));
+  // Initialize with demo data so all UI sections show data immediately
+  const [rooms,      setRooms]     = useState(ROOM_USAGE_DEMO);
+  const [loading,    setLoading]   = useState(true);
   const [saving,     setSaving]    = useState(false);
   const [filter,     setFilter]    = useState('all');
   const [modal,      setModal]     = useState(null);
   const [editTarget, setEditTarget]= useState(null);
   const [delId,      setDelId]     = useState(null);
   const { list, dismiss, toast } = useToast();
+
+  /* Load real data from backend.
+   * Overwrites demo data ONLY if backend returns rooms with real utilization > 0.
+   * If calcRoomUtilization produces all-zero utilization (no timetable match),
+   * we keep ROOM_USAGE_DEMO so the UI never goes blank. */
+  const loadData = useCallback(async (showToast = false) => {
+    setLoading(true);
+    try {
+      const [rms, tts] = await Promise.all([
+        fetchRooms().catch(()    => []),
+        fetchTimetables().catch(() => []),
+      ]);
+      const roomArr = normalizeArray(rms);
+      const ttArr   = normalizeArray(tts);
+      const utilised = calcRoomUtilization(roomArr, ttArr, AVAILABLE_HRS).map(r => ({
+        roomId:         r.roomId || r._id,
+        roomName:       r.roomName || r.name,
+        roomType:       r.roomType || r.type || '',
+        capacity:       r.capacity || 0,
+        scheduledHours: r.scheduledHours || 0,
+        availableHours: r.availableHours || AVAILABLE_HRS,
+        utilization:    r.utilization || 0,
+        status:         r.status || 'unused',
+      }));
+      // Only replace demo data if real backend data has non-zero utilization
+      const hasRealData = utilised.some(r => r.utilization > 0);
+      if (hasRealData) {
+        setRooms(utilised);
+        if (showToast) toast.success('Live data loaded from backend', 4000);
+      } else {
+        // Keep demo data — backend returned rooms but no timetable matches
+        if (showToast) toast.info('No timetable data matched — showing demo data', 4000);
+      }
+    } catch (err) {
+      toast.error(`Failed to load data: ${err.message}`, 4000);
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   /* ── derived ── */
   const filtered = filter === 'all' ? rooms : rooms.filter(r => r.status === filter);
@@ -235,38 +290,51 @@ export default function ResourceUtilization() {
     { label: 'Unused Rooms',     value: rooms.filter(r=>r.status==='unused').length,                                                    color: 'text-amber-500',   bg: 'bg-amber-100' },
   ];
 
-  /* ── CRUD (local only) ── */
+  /* ── CRUD (calls backend API) ── */
   function openAdd()  { setEditTarget(null); setModal('add');  toast.info('Fill in room details', 3000); }
   function openEdit(r){ setEditTarget(r);    setModal('edit'); toast.info(`Editing "${r.roomName}"`, 3000); }
 
-  function handleAdd(payload) {
-    const scheduled = Math.floor(Math.random() * AVAILABLE_HRS);
-    const utilization = Math.min(Math.round((scheduled / AVAILABLE_HRS) * 100), 100);
-    setRooms(p => [...p, {
-      roomId: 'r' + Date.now(),
-      roomName: payload.name,
-      roomType: payload.type,
-      capacity: payload.capacity,
-      scheduledHours: scheduled,
-      availableHours: AVAILABLE_HRS,
-      utilization,
-      status: computeStatus(utilization),
-    }]);
-    toast.success('Room added successfully', 4000);
+  async function handleAdd(payload) {
+    setSaving(true);
+    try {
+      await createRoom({ name: payload.name, type: payload.type, capacity: payload.capacity, status: payload.status || 'available' });
+      toast.success('Room added successfully', 4000);
+      setModal(null);
+      await loadData();
+    } catch (err) {
+      toast.error(`Failed to add room: ${err.message}`, 4000);
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function handleUpdate(payload) {
-    setRooms(p => p.map(r => r.roomId === payload.roomId
-      ? { ...r, roomName: payload.name, roomType: payload.type, capacity: payload.capacity }
-      : r
-    ));
-    toast.success('Room updated successfully', 4000);
+  async function handleUpdate(payload) {
+    setSaving(true);
+    try {
+      await updateRoom(payload.roomId, { name: payload.name, type: payload.type, capacity: payload.capacity });
+      toast.success('Room updated successfully', 4000);
+      setModal(null);
+      await loadData();
+    } catch (err) {
+      toast.error(`Failed to update room: ${err.message}`, 4000);
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function handleDelete() {
-    setRooms(p => p.filter(r => r.roomId !== delId));
-    setDelId(null);
-    toast.success('Room deleted successfully', 4000);
+  async function handleDelete() {
+    setSaving(true);
+    try {
+      await deleteRoom(delId);
+      setDelId(null);
+      toast.success('Room deleted successfully', 4000);
+      await loadData();
+    } catch (err) {
+      toast.error(`Failed to delete room: ${err.message}`, 4000);
+      setDelId(null);
+    } finally {
+      setSaving(false);
+    }
   }
 
   const handleFilter = (k) => {
@@ -327,8 +395,8 @@ export default function ResourceUtilization() {
         <span className="text-slate-300">/</span>
         <span className="text-sm font-semibold">Resource Utilization</span>
         <div className="ml-auto flex items-center gap-2 flex-wrap">
-          <button onClick={() => {}} className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-full bg-slate-100 text-muted hover:bg-slate-200 transition-all">
-            <FaSync className="text-[10px]" /> Sync
+          <button onClick={() => loadData(true)} className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-full bg-slate-100 text-muted hover:bg-slate-200 transition-all" disabled={loading}>
+            {loading ? <FaSpinner className="animate-spin-slow text-[10px]" /> : <FaSync className="text-[10px]" />} Sync
           </button>
           <button id="btn-add-room" onClick={openAdd} disabled={!!modal}
             className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-full bg-primary text-white hover:bg-primary/90 transition-all shadow-sm disabled:opacity-40">
@@ -343,7 +411,12 @@ export default function ResourceUtilization() {
           <h1 className="text-3xl sm:text-4xl font-extrabold mb-2">
             Resource <span className="bg-gradient-to-r from-emerald-500 to-teal-400 bg-clip-text text-transparent">Utilization</span>
           </h1>
-          <p className="text-muted text-lg">Room scheduling data — detect underutilized spaces and optimize allocations.</p>
+          <p className="text-muted text-lg flex items-center gap-2 flex-wrap">
+            Room scheduling data. Detect under-utilised spaces and optimise allocations.
+            <span className="inline-block text-[11px] font-semibold text-slate-400 opacity-60 border border-slate-200 rounded-full px-2 py-0.5">
+              Sample Data · Demo
+            </span>
+          </p>
         </Reveal>
 
         {/* summary */}
