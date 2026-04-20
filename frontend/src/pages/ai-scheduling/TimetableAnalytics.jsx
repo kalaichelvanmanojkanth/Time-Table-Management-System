@@ -54,6 +54,18 @@ function overlapsTime(s1, e1, s2, e2) {
   return toMinutes(s1) < toMinutes(e2) && toMinutes(s2) < toMinutes(e1);
 }
 
+/**
+ * If a value looks like a raw MongoDB ObjectId (24 hex chars),
+ * return the fallback instead. This is a safety net for old data
+ * seeded before the backend name-resolution fix.
+ */
+function resolveDisplayName(value, fallback) {
+  if (!value) return fallback || '—';
+  // 24-char hex string = ObjectId — should never reach UI
+  if (/^[a-f\d]{24}$/i.test(String(value))) return fallback || String(value);
+  return String(value);
+}
+
 function buildGridFromEntries(entries) {
   const grid = {};
   const slotSet = new Set();
@@ -61,9 +73,13 @@ function buildGridFromEntries(entries) {
     if (!e.day || !e.startTime) continue;
     if (!grid[e.day]) grid[e.day] = {};
     grid[e.day][e.startTime] = {
-      subject: e.subject, teacher: e.teacher, room: e.room,
-      status: e.status || 'draft', _id: e._id,
-      startTime: e.startTime, endTime: e.endTime,
+      subject:   resolveDisplayName(e.subject,  e.subjectId?.name || e.subjectId),
+      teacher:   resolveDisplayName(e.teacher,  e.teacherId?.name || e.teacherId),
+      room:      resolveDisplayName(e.room,      e.roomId?.name    || e.roomId),
+      status:    e.status || 'draft',
+      _id:       e._id,
+      startTime: e.startTime,
+      endTime:   e.endTime,
     };
     slotSet.add(e.startTime);
   }
@@ -402,7 +418,17 @@ export default function TimetableAnalytics() {
   const [optimResult, setOptimResult] = useState(null);
   const [filter,      setFilter]      = useState({ teacher: '', subject: '', room: '' });
 
-  useEffect(() => { loadTimetable(); }, []);
+  // Initial load + 5-second auto-polling so other admins' changes appear automatically
+  useEffect(() => {
+    loadTimetable();
+
+    const interval = setInterval(() => {
+      loadTimetable({ silent: true });
+    }, 5000);
+
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!entries.length) { setTimetableStatus('draft'); return; }
@@ -412,35 +438,61 @@ export default function TimetableAnalytics() {
     else                                                                 setTimetableStatus('draft');
   }, [entries]);
 
-  /* ── Load timetable from MongoDB ── */
+  /* ── Load timetable from MongoDB ──
+     filters.silent = true  → background poll (no toasts, no loading spinner)
+  */
   const loadTimetable = useCallback(async (filters = {}) => {
-    setLoading(true);
+    const isSilent = filters.silent === true;
+    const apiFilters = { ...filters };
+    delete apiFilters.silent;
+
+    if (!isSilent) setLoading(true);
     try {
-      const res = await getTimetables(filters);
+      const res = await getTimetables(apiFilters);
       const { data: dbEntries = [], meta } = res.data;
 
-      const { grid: g, sortedSlots: ss } = buildGridFromEntries(dbEntries);
-      const existingDays = [...new Set(dbEntries.map(e => e.day))]
+      // Debug: log a sample to verify names are resolving correctly
+      console.log('[FinalSchedule] Fetched timetable:', dbEntries.length, 'entries', isSilent ? '(background poll)' : '(manual)');
+      if (dbEntries.length > 0) {
+        const sample = dbEntries[0];
+        console.log('[FinalSchedule] Sample entry →', {
+          subject: sample.subject, teacher: sample.teacher, room: sample.room,
+        });
+      }
+
+      // Normalize: replace any raw ObjectId strings with readable names before storing in state
+      const normalizedEntries = dbEntries.map(e => ({
+        ...e,
+        subject: resolveDisplayName(e.subject, e.subjectId?.name || e.subjectId),
+        teacher: resolveDisplayName(e.teacher, e.teacherId?.name || e.teacherId),
+        room:    resolveDisplayName(e.room,    e.roomId?.name    || e.roomId),
+      }));
+
+      const { grid: g, sortedSlots: ss } = buildGridFromEntries(normalizedEntries);
+      const existingDays = [...new Set(normalizedEntries.map(e => e.day))]
         .sort((a, b) => ALL_DAYS.indexOf(a) - ALL_DAYS.indexOf(b));
 
-      setEntries(dbEntries);
+      setEntries(normalizedEntries);
       setGrid(g);
       setSortedSlots(ss);
       setDays(existingDays);
       setDbMeta(meta);
 
-      if (!dbEntries.length) {
-        toast.info('No timetable data — seed the DB from AI Setup first');
-      } else {
-        const conflicts = countConflicts(dbEntries);
-        if (conflicts > 0) toast.warning(`⚠️ ${conflicts} conflict(s) found in timetable`);
-        else               toast.success(`✅ ${dbEntries.length} entries loaded — no conflicts`);
+      // Only show toasts on manual reloads — background polls are silent
+      if (!isSilent) {
+        if (!normalizedEntries.length) {
+          toast.info('No timetable data — seed the DB from AI Setup first');
+        } else {
+          const conflicts = countConflicts(normalizedEntries);
+          if (conflicts > 0) toast.warning(`⚠️ ${conflicts} conflict(s) found in timetable`);
+          else               toast.success(`✅ ${normalizedEntries.length} entries loaded — no conflicts`);
+        }
       }
     } catch (err) {
       console.error('[TimetableAnalytics] load error:', err.message);
-      toast.error(err?.response?.data?.message || 'Failed to load timetable');
+      if (!isSilent) toast.error(err?.response?.data?.message || 'Failed to load timetable');
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   }, []);
 
