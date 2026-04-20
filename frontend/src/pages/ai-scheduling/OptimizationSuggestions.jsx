@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import {
@@ -45,23 +46,31 @@ const TYPE_ICON = {
 ════════════════════════════════════════════ */
 function SkeletonCard() {
   return (
-    <div className="border border-slate-100 dark:border-slate-700 rounded-2xl p-5 flex items-start gap-4 animate-pulse">
-      <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex-shrink-0" />
+    <div className="relative border border-slate-100 dark:border-slate-700/60 rounded-2xl p-5 flex items-start gap-4 overflow-hidden bg-white/60 dark:bg-slate-800/60">
+      <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/30 dark:via-white/5 to-transparent" />
+      <div className="w-12 h-12 rounded-2xl bg-slate-200 dark:bg-slate-700 flex-shrink-0" />
       <div className="flex-1 space-y-2.5">
-        <div className="h-3.5 bg-slate-200 dark:bg-slate-700 rounded w-1/2" />
-        <div className="h-2.5 bg-slate-100 dark:bg-slate-800 rounded w-full" />
-        <div className="h-2.5 bg-slate-100 dark:bg-slate-800 rounded w-4/5" />
+        <div className="h-3.5 bg-slate-200 dark:bg-slate-700 rounded-lg w-1/2" />
+        <div className="h-2.5 bg-slate-100 dark:bg-slate-800 rounded-lg w-full" />
+        <div className="h-2.5 bg-slate-100 dark:bg-slate-800 rounded-lg w-4/5" />
       </div>
     </div>
   );
 }
 
-function StatCard({ label, value, color }) {
+function StatCard({ label, value, color, bg, icon }) {
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm p-5 text-center hover:shadow-md transition-shadow">
-      <div className={`text-3xl font-extrabold ${color} mb-1`}>{value}</div>
-      <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">{label}</div>
-    </div>
+    <motion.div
+      whileHover={{ scale: 1.03, y: -2 }}
+      transition={{ duration: 0.2 }}
+      className={`rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm`}
+    >
+      <div className={`h-1 w-full ${bg || 'bg-slate-200'}`} />
+      <div className="p-5 text-center">
+        <div className={`text-3xl font-extrabold ${color} mb-1 tabular-nums`}>{value}</div>
+        <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">{label}</div>
+      </div>
+    </motion.div>
   );
 }
 
@@ -72,29 +81,33 @@ function SuggestionCard({ suggestion, applied, onApply, applying }) {
   const sev        = ['high','medium','low','info'].includes(suggestion.severity) ? suggestion.severity : 'info';
 
   return (
-    <div
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
       className={`border rounded-2xl p-5 flex items-start gap-4 transition-all duration-300
-        ${isApplied ? 'opacity-40 saturate-50' : SEV_STYLE[sev]}
-        ${!isApplied ? 'hover:shadow-md hover:-translate-y-0.5' : ''}
+        ${isApplied ? 'opacity-50 saturate-50 bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700' : SEV_STYLE[sev]}
+        ${!isApplied ? 'hover:shadow-lg hover:-translate-y-0.5 backdrop-blur-sm bg-white/80 dark:bg-slate-800/70' : ''}
         ${isApplying ? 'scale-95 opacity-30' : 'scale-100'}`}
     >
-      <div className="w-10 h-10 rounded-full bg-white/60 dark:bg-slate-800/60 flex items-center justify-center text-xl flex-shrink-0 shadow-sm">
+      <div className="w-11 h-11 rounded-2xl bg-white dark:bg-slate-800 flex items-center justify-center text-xl flex-shrink-0 shadow-sm border border-slate-100 dark:border-slate-700">
         {TYPE_ICON[suggestion.type] || '💡'}
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap mb-1">
-          <span className="font-bold text-sm">{suggestion.message}</span>
-          <span className={`text-[10px] font-black uppercase tracking-widest rounded-full px-2 py-0.5 ${BADGE_STYLE[sev]}`}>
+        <div className="flex items-center gap-2 flex-wrap mb-1.5">
+          <span className="font-bold text-sm leading-snug">{suggestion.message}</span>
+          <span className={`text-[9px] font-black uppercase tracking-widest rounded-full px-2.5 py-0.5 ${BADGE_STYLE[sev]}`}>
             {sev}
           </span>
           {isApplied && (
-            <span className="text-[10px] font-black uppercase tracking-widest rounded-full px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300">
-              Applied ✓
+            <span className="text-[9px] font-black uppercase tracking-widest rounded-full px-2.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+              ✓ Applied
             </span>
           )}
         </div>
-        <p className="text-xs leading-relaxed mb-2 opacity-80">{suggestion.fix}</p>
+        <p className="text-xs leading-relaxed mb-2 opacity-75">{suggestion.fix}</p>
       </div>
 
       <button
@@ -103,13 +116,13 @@ function SuggestionCard({ suggestion, applied, onApply, applying }) {
         disabled={isApplied || isApplying}
         className={`flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200
           ${isApplied
-            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 cursor-not-allowed border border-emerald-200 dark:border-emerald-800'
-            : 'bg-white/70 dark:bg-slate-700/70 hover:bg-white dark:hover:bg-slate-700 border border-current/20 hover:scale-[1.04] active:scale-95 shadow-sm hover:shadow-md'
+            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 cursor-not-allowed border border-emerald-200 dark:border-emerald-800 shadow-none'
+            : 'bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-600 hover:scale-[1.05] active:scale-95 shadow-sm hover:shadow-md'
           }`}
       >
         {isApplied ? <><FaCheckCircle className="text-emerald-500" /> Applied</> : 'Apply Fix'}
       </button>
-    </div>
+    </motion.div>
   );
 }
 
@@ -163,13 +176,40 @@ export default function OptimizationSuggestions() {
   const [optimResult,  setOptimResult]  = useState(null); // { before, after, meta }
   const [publishing,   setPublishing]   = useState(false);
   const [published,    setPublished]    = useState(false);
+  const [dataRefreshed, setDataRefreshed] = useState(false); // banner: new data arrived
 
-  /* Load DB status */
-  useEffect(() => {
-    getTimetables()
-      .then(res => setDbEntries(res.data?.count || 0))
-      .catch(() => {});
+  // Track previous count to detect changes made by other admins
+  const prevCountRef = useRef(0);
+
+  /* Load DB entry count — called manually and by background poll */
+  const loadDbCount = useCallback(async (silent = false) => {
+    try {
+      const res = await getTimetables();
+      const count = res.data?.count || 0;
+      console.log('[OptimizationSuggestions] DB entries:', count, silent ? '(background poll)' : '(manual)');
+      setDbEntries(count);
+    } catch (e) {
+      if (!silent) console.error('[OptimizationSuggestions] loadDbCount error:', e.message);
+    }
   }, []);
+
+  /* Initial load + 5-second auto-polling */
+  useEffect(() => {
+    loadDbCount();
+    const interval = setInterval(() => loadDbCount(true), 5000);
+    return () => clearInterval(interval);
+  }, [loadDbCount]);
+
+  /* Detect when another admin changes the timetable */
+  useEffect(() => {
+    if (dbEntries === 0) { prevCountRef.current = 0; return; }
+    if (prevCountRef.current !== 0 && prevCountRef.current !== dbEntries) {
+      console.log('[OptimizationSuggestions] Entry count changed:', prevCountRef.current, '→', dbEntries, '— notifying user...');
+      if (generated) setDataRefreshed(true);
+    }
+    prevCountRef.current = dbEntries;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbEntries]);
 
   /* ── Seed DB ── */
   const handleSeed = useCallback(async () => {
@@ -178,14 +218,13 @@ export default function OptimizationSuggestions() {
     try {
       const res = await seedTimetableFromSetup();
       toast.success(`✅ Seeded ${res.data?.count || 0} entries`);
-      const dbRes = await getTimetables();
-      setDbEntries(dbRes.data?.count || 0);
+      await loadDbCount();
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Seed failed');
     } finally {
       setSeeding(false);
     }
-  }, []);
+  }, [loadDbCount]);
 
   /* ── Generate AI Suggestions from real DB ── */
   const runAnalysis = useCallback(async () => {
@@ -310,16 +349,42 @@ export default function OptimizationSuggestions() {
               </div>
             </div>
           </div>
-          <button
-            id="seed-db-opt-btn"
-            onClick={handleSeed}
-            disabled={seeding}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-bold rounded-xl text-xs transition-all active:scale-95"
-          >
-            {seeding ? <FaSync className="animate-spin" /> : <FaDatabase />}
-            {seeding ? 'Seeding...' : 'Seed DB'}
-          </button>
+          <div className="flex gap-2">
+            <button
+              id="reload-db-opt-btn"
+              onClick={() => loadDbCount()}
+              title="Reload entry count from MongoDB"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-all active:scale-95"
+            >
+              <FaSync /> Reload from DB
+            </button>
+            <button
+              id="seed-db-opt-btn"
+              onClick={handleSeed}
+              disabled={seeding}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-bold rounded-xl text-xs transition-all active:scale-95"
+            >
+              {seeding ? <FaSync className="animate-spin" /> : <FaDatabase />}
+              {seeding ? 'Seeding...' : 'Seed DB'}
+            </button>
+          </div>
         </div>
+
+        {/* ── Live Data Updated Notice ── */}
+        {dataRefreshed && !loading && (
+          <div className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 mb-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-sm">
+            <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 font-semibold">
+              <FaSync className="text-blue-500 animate-spin" style={{ animationDuration: '3s' }} />
+              Live data updated — another admin changed the timetable
+            </div>
+            <button
+              onClick={() => { setDataRefreshed(false); runAnalysis(); }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition-all active:scale-95"
+            >
+              <FaBrain /> Re-analyse
+            </button>
+          </div>
+        )}
 
         {/* ── Action Buttons ── */}
         <div className="flex flex-wrap gap-3 justify-center mb-8">
