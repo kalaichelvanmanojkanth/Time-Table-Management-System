@@ -6,11 +6,18 @@
  * Architecture:
  *  - Uses centralized API client from services/api.js
  *  - Base URL defaults to http://localhost:5001/api
- *  - Backend populates Timetable references: subjectId, teacherId, roomId
- *    so each entry looks like:
- *      { subjectId: { _id, name, department }, teacherId: { _id, name }, ... }
+ *  - Timetable documents store teacherId and roomId as PLAIN STRING ObjectIds.
+ *    Backend does NOT populate these references.
+ *    All matching is done CLIENT-SIDE by string ID comparison.
+ *
+ *  ID matching strategy (calcLecturerWorkload / calcRoomUtilization):
+ *    1. Extract the raw id string from the timetable field (handles plain string, populated
+ *       object, or MongoDB ObjectId-like object with .toString())
+ *    2. Compare it against the lecturer/room _id string
+ *    3. Fall back to name-string match only if no id is available
  *
  * Every public function is SAFE: always returns an array or usable value.
+ * ALL naming is standardized to "lecturer" throughout.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -55,7 +62,7 @@ function extractArray(responseData) {
 
 /**
  * Safe GET that always resolves to an array.
- * path must start with '/'  (e.g. '/teachers', '/analytics/workload').
+ * path must start with '/'  (e.g. '/lecturers', '/analytics/workload').
  * The axios instance already has baseURL='/api'.
  */
 async function safeFetch(path) {
@@ -77,16 +84,21 @@ async function safeFetch(path) {
    PUBLIC FETCH FUNCTIONS — Core Collections
 ═══════════════════════════════════════════════════════════════════════════ */
 
-export const fetchTeachers = async () => {
-  const rows = await safeFetch('/teachers');
-  return rows.map((t, i) => ({
-    ...t,
-    _id: t._id || t.id || `teacher-${i}`,
-    name: t.name || t.teacherName || t.fullName || t.lecturerName || 'Unknown Faculty',
-    department: t.department || t.dept || '',
-    maxWeeklyHours: Number(t.maxWeeklyHours || t.maxHours || 20),
+export const fetchLecturers = async () => {
+  const rows = await safeFetch('/lecturers');
+  return rows.map((l, i) => ({
+    ...l,
+    _id:            l._id || l.id || `lecturer-${i}`,
+    name:           l.name || l.lecturerName || l.teacherName || l.fullName || 'Unknown Faculty',
+    department:     l.department || l.dept || '',
+    maxWeeklyHours: Number(l.maxWeeklyHours || l.maxHours || 20),
+    lecturerId:     l._id || l.id || `lecturer-${i}`,
+    lecturerName:   l.name || l.lecturerName || l.fullName || 'Unknown Faculty',
   }));
 };
+
+// Backward-compat alias (used by AnalyticsDashboard which still calls fetchTeachers)
+export const fetchTeachers = fetchLecturers;
 
 export const fetchSubjects = () => safeFetch('/subjects');
 export const fetchRooms = () => safeFetch('/rooms');
@@ -105,27 +117,33 @@ export const saveSchedule = (data) => createTimetable(data);
    directly — faster and more accurate than client-side computes.
 ═══════════════════════════════════════════════════════════════════════════ */
 
-/** Live KPI counts: { teachers, subjects, rooms, timetables } */
+/** Live KPI counts: { lecturers, subjects, rooms, timetables } */
 export async function fetchAnalyticsSummary() {
   try {
     const res = await api.get('/analytics/summary');
     const d   = res.data?.data || res.data || {};
     console.log('[API] /analytics/summary →', d);
     return {
-      teachers:   Number(d.teachers   ?? 0),
+      lecturers:  Number(d.lecturers  ?? d.teachers  ?? 0),
       subjects:   Number(d.subjects   ?? 0),
       rooms:      Number(d.rooms      ?? 0),
       timetables: Number(d.timetables ?? 0),
     };
   } catch (err) {
     console.error('[API] /analytics/summary FAILED:', err?.response?.data?.message || err.message);
-    return { teachers: 0, subjects: 0, rooms: 0, timetables: 0 };
+    return { lecturers: 0, subjects: 0, rooms: 0, timetables: 0 };
   }
 }
 
-/** Server-computed teacher workload array */
+/** Server-computed lecturer workload array */
 export async function fetchWorkload() {
-  return safeFetch('/analytics/workload');
+  const rows = await safeFetch('/analytics/workload');
+  // Normalize: ensure lecturerId/lecturerName fields are set from either naming convention
+  return rows.map(r => ({
+    ...r,
+    lecturerId:   r.lecturerId   || r.teacherId   || '',
+    lecturerName: r.lecturerName || r.teacherName || 'Unknown',
+  }));
 }
 
 /** Server-computed room utilization array */
@@ -144,29 +162,34 @@ export async function fetchWeeklyTrend() {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   CRUD — Teachers
+   CRUD — Lecturers
 ═══════════════════════════════════════════════════════════════════════════ */
 
-export const createTeacher = async (data) => {
-  console.log('[API] POST /teachers payload:', data);
-  const res = await api.post('/teachers', data);
-  console.log('[API] POST /teachers response:', res.data);
+export const createLecturer = async (data) => {
+  console.log('[API] POST /lecturers payload:', data);
+  const res = await api.post('/lecturers', data);
+  console.log('[API] POST /lecturers response:', res.data);
   const record = res.data?.data ?? res.data;
-  if (!record) throw new Error('No data returned from createTeacher');
+  if (!record) throw new Error('No data returned from createLecturer');
   return record;
 };
 
-export const updateTeacher = async (id, data) => {
-  console.log(`[API] PUT /teachers/${id} payload:`, data);
-  const res = await api.put(`/teachers/${id}`, data);
-  console.log(`[API] PUT /teachers/${id} response:`, res.data);
+export const updateLecturer = async (id, data) => {
+  console.log(`[API] PUT /lecturers/${id} payload:`, data);
+  const res = await api.put(`/lecturers/${id}`, data);
+  console.log(`[API] PUT /lecturers/${id} response:`, res.data);
   return res.data?.data ?? res.data;
 };
 
-export const deleteTeacher = (id) => {
-  console.log(`[API] DELETE /teachers/${id}`);
-  return api.delete(`/teachers/${id}`);
+export const deleteLecturer = (id) => {
+  console.log(`[API] DELETE /lecturers/${id}`);
+  return api.delete(`/lecturers/${id}`);
 };
+
+// Backward-compat aliases — kept to avoid breaking any components that still import old names
+export const createTeacher = createLecturer;
+export const updateTeacher = updateLecturer;
+export const deleteTeacher = deleteLecturer;
 
 /* ═══════════════════════════════════════════════════════════════════════════
    CRUD — Subjects
@@ -258,19 +281,50 @@ function slotMinutes(entry) {
 }
 
 /**
- * Safely extract the string ID from a field that may be:
- *   - a populated Mongoose object:  { _id: "64abc...", name: "..." }
- *   - a raw ObjectId string:         "64abc..."
- *   - null / undefined
+ * Safely extract a normalised string ID from a timetable field value.
+ *
+ * Handles all of these shapes:
+ *   - Plain string ObjectId:           "64abc1234567890abcdef012"
+ *   - Populated Mongoose object:        { _id: "64abc...", name: "..." }
+ *   - MongoDB ObjectId-like object:     { $oid: "64abc..." } or obj.toString()
+ *   - Numbers, null, undefined
+ *
+ * Returns a lowercased, trimmed string so comparisons are case-insensitive.
  */
 function resolveId(field) {
   if (field == null) return '';
-  if (typeof field === 'number') return String(field);
+  if (typeof field === 'number') return String(field).trim();
+  if (typeof field === 'string') return field.trim().toLowerCase();
   if (typeof field === 'object') {
-    const id = field._id ?? field.id;
-    return id != null ? String(id) : '';
+    // populated Mongoose document or plain object with _id / id
+    const id = field._id ?? field.id ?? field.$oid ?? null;
+    if (id != null) return resolveId(id); // recurse to handle nested ObjectIds
+    // ObjectId instance from mongoose — has .toString()
+    if (typeof field.toString === 'function') {
+      const s = field.toString().trim();
+      // Only use if it looks like a valid 24-hex ObjectId or non-empty string
+      if (s && s !== '[object Object]') return s.toLowerCase();
+    }
   }
-  return String(field);
+  return '';
+}
+
+/**
+ * Extract a normalised ID string specifically from a timetable entry reference.
+ * Tries multiple field aliases so plain-string and populated-object shapes both work.
+ *
+ * @param {object} entry   – one raw timetable document
+ * @param {string[]} keys  – ordered list of field names to check
+ * @returns {string}       – trimmed, lowercased id string, or ''
+ */
+function extractTimetableId(entry, keys) {
+  for (const key of keys) {
+    const val = entry[key];
+    if (val == null) continue;
+    const id = resolveId(val);
+    if (id) return id;
+  }
+  return '';
 }
 
 /**
@@ -287,19 +341,23 @@ export function normalizeDay(day) {
 /* ── Field extractors for timetable entries ── */
 
 /**
- * Get teacher name from a timetable entry.
- * Entry.teacherId may be a populated object { _id, name } or a plain string.
+ * Get lecturer name from a timetable entry.
+ * Entry.teacherId / entry.lecturerId may be a populated object { _id, name } or a plain string.
  */
-export function getTeacherName(entry) {
+export function getLecturerName(entry) {
   if (!entry) return '';
-  // populated reference
-  if (entry.teacherId && typeof entry.teacherId === 'object' && (entry.teacherId.name || entry.teacherId.teacherName || entry.teacherId.fullName || entry.teacherId.lecturerName))
-    return entry.teacherId.name || entry.teacherId.teacherName || entry.teacherId.fullName || entry.teacherId.lecturerName;
+  // populated reference — teacherId field (used by Mongoose)
+  if (entry.teacherId && typeof entry.teacherId === 'object' && (entry.teacherId.name || entry.teacherId.lecturerName || entry.teacherId.fullName))
+    return entry.teacherId.name || entry.teacherId.lecturerName || entry.teacherId.fullName;
+  // populated reference — lecturerId field
   if (entry.lecturerId && typeof entry.lecturerId === 'object' && (entry.lecturerId.name || entry.lecturerId.lecturerName || entry.lecturerId.fullName))
     return entry.lecturerId.name || entry.lecturerId.lecturerName || entry.lecturerId.fullName;
-  // flat fields
-  return entry.teacherName || entry.teacher || entry.fullName || entry.lecturerName || entry.faculty || entry.lecturer || '';
+  // flat fields (both naming conventions supported)
+  return entry.lecturerName || entry.teacherName || entry.teacher || entry.fullName || entry.faculty || entry.lecturer || '';
 }
+
+// Backward-compat alias
+export const getTeacherName = getLecturerName;
 
 /**
  * Get room name from a timetable entry.
@@ -349,33 +407,71 @@ function parseSlotRange(slotLike) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   calcTeacherWorkload
+   calcLecturerWorkload
    ─────────────────────────────────────────────────────────────────────────
-   Matches each teacher to timetable entries using:
-     1. ObjectId match   — resolveId(entry.teacherId) === teacher._id
-     2. Name match       — norm(getTeacherName(entry)) === norm(teacher.name)
+   Timetable collections store teacherId as a PLAIN STRING ObjectId.
+   Backend does NOT populate — matching is done client-side.
 
-   Returns array of workload objects for each teacher.
+   ID extraction from a timetable entry (same pattern that works for subjects):
+     String(entry.teacherId?._id || entry.teacherId || entry.teacher || entry.lecturerId || '')
+
+   vs lecturer id:
+     String(lecturer._id || lecturer.id || '')
 ═══════════════════════════════════════════════════════════════════════════ */
-export function calcTeacherWorkload(teachers, timetable) {
-  if (!Array.isArray(teachers) || teachers.length === 0) return [];
+export function calcLecturerWorkload(lecturers, timetable) {
+  if (!Array.isArray(lecturers) || lecturers.length === 0) return [];
 
   const entries = Array.isArray(timetable) ? timetable : [];
-  console.log('[calcTeacherWorkload] teachers:', teachers.length, '| timetable entries:', entries.length);
 
-  return teachers.map(teacher => {
-    // Normalize teacher fields — backend uses `name` field
-    const tid    = String(teacher._id || teacher.id || '');
-    const tname  = norm(teacher.name || teacher.teacherName || '');
-    const maxHrs = Number(teacher.maxWeeklyHours) || 20;
+  // Debug: show the first timetable entry so we can see what fields are present
+  if (entries.length > 0) {
+    const s = entries[0];
+    console.log('[calcLecturerWorkload] first entry snapshot =>', {
+      _id:        s._id,
+      teacherId:  s.teacherId,
+      lecturerId: s.lecturerId,
+      teacher:    s.teacher,
+    });
+  }
+  // Debug: show first lecturer so we know its _id format
+  if (lecturers.length > 0) {
+    const l0 = lecturers[0];
+    console.log('[calcLecturerWorkload] first lecturer =>', { _id: l0._id, name: l0.name });
+  }
+
+  console.log('[calcLecturerWorkload] lecturers:', lecturers.length, '| entries:', entries.length);
+
+  return lecturers.map(lecturer => {
+    // Lecturer's own id — plain String(), no lowercase transform
+    const lid    = String(lecturer._id || lecturer.id || '');
+    const lname  = norm(lecturer.name || lecturer.lecturerName || '');
+    const maxHrs = Number(lecturer.maxWeeklyHours) || 20;
 
     const matched = entries.filter(e => {
-      // Try ID match first (most reliable)
-      const eid = resolveId(e.teacherId);
-      if (eid && tid && eid === tid) return true;
-      // Fallback: name match
-      const ename = norm(getTeacherName(e));
-      return ename && tname && ename === tname;
+      // ── Step 1: ID match — optional-chaining String().trim() ──
+      const entryId = String(
+        e.teacherId?._id ||
+        e.teacherId      ||
+        e.lecturerId?._id||
+        e.lecturerId     ||
+        ''
+      ).trim();
+
+      const lecturerId = String(lecturer._id || lecturer.id || '').trim();
+
+      console.log('ENTRY ID:', entryId, 'TARGET ID:', lecturerId);
+
+      if (entryId && lecturerId) {
+        if (entryId === lecturerId) return true;
+        return false; // id present but no match — skip name fallback
+      }
+
+      // ── Step 2: Name fallback (only when entry has NO id at all) ──
+      const ename = norm(
+        e.lecturerName || e.teacherName || e.teacher ||
+        e.faculty || e.lecturer || ''
+      );
+      return ename && lname && ename === lname;
     });
 
     const totalMinutes = matched.reduce((sum, e) => sum + slotMinutes(e), 0);
@@ -386,12 +482,17 @@ export function calcTeacherWorkload(teachers, timetable) {
       totalHours > maxHrs       ? 'overloaded'  :
       totalHours < maxHrs * 0.5 ? 'underloaded' : 'optimal';
 
-    console.log(`[calcTeacherWorkload] ${tname}: matched=${matched.length}, hours=${totalHours}, status=${status}`);
+    console.log(
+      `[calcLecturerWorkload] "${lname}" (lid=${lid}):`,
+      `matched=${matched.length} | hours=${totalHours} | status=${status}`
+    );
 
     return {
-      teacherId:      tid,
-      teacherName:    teacher.name || teacher.teacherName || 'Unknown',
-      department:     teacher.department || '',
+      lecturerId:     lid,
+      lecturerName:   lecturer.name || lecturer.lecturerName || 'Unknown',
+      teacherId:      lid,   // backward-compat alias
+      teacherName:    lecturer.name || lecturer.lecturerName || 'Unknown',
+      department:     lecturer.department || '',
       totalHours,
       totalMinutes,
       totalClasses,
@@ -401,24 +502,74 @@ export function calcTeacherWorkload(teachers, timetable) {
   });
 }
 
+// Backward-compat alias
+export const calcTeacherWorkload = calcLecturerWorkload;
+
 /* ═══════════════════════════════════════════════════════════════════════════
    calcRoomUtilization
+   ─────────────────────────────────────────────────────────────────────────
+   Timetable collections store roomId as a PLAIN STRING ObjectId.
+   Backend does NOT populate — matching is done client-side.
+
+   ID extraction from a timetable entry:
+     String(entry.roomId?._id || entry.roomId || entry.room || '')
+
+   vs room id:
+     String(room._id || room.id || '')
 ═══════════════════════════════════════════════════════════════════════════ */
 export function calcRoomUtilization(rooms, timetable, weeklyAvailableHours = 40) {
   if (!Array.isArray(rooms) || rooms.length === 0) return [];
 
   const entries = Array.isArray(timetable) ? timetable : [];
   const avail   = weeklyAvailableHours > 0 ? weeklyAvailableHours : 40;
+
+  // Debug: show the first timetable entry room fields
+  if (entries.length > 0) {
+    const s = entries[0];
+    console.log('[calcRoomUtilization] first entry snapshot =>', {
+      _id:       s._id,
+      roomId:    s.roomId,
+      room:      s.room,
+      classroom: s.classroom,
+    });
+  }
+  // Debug: show first room
+  if (rooms.length > 0) {
+    const r0 = rooms[0];
+    console.log('[calcRoomUtilization] first room =>', { _id: r0._id, name: r0.name });
+  }
+
   console.log('[calcRoomUtilization] rooms:', rooms.length, '| entries:', entries.length, '| avail:', avail);
 
   return rooms.map(room => {
+    // Room's own id — plain String(), no lowercase transform
     const rid   = String(room._id || room.id || '');
     const rname = norm(room.name || '');
 
     const matched = entries.filter(e => {
-      const eid = resolveId(e.roomId);
-      if (eid && rid && eid === rid) return true;
-      const ename = norm(getRoomName(e));
+      // ── Step 1: ID match — optional-chaining String().trim() ──
+      const entryId = String(
+        e.roomId?._id     ||
+        e.roomId          ||
+        e.classroomId?._id||
+        e.classroomId     ||
+        ''
+      ).trim();
+
+      const roomId = String(room._id || room.id || '').trim();
+
+      console.log('ENTRY ID:', entryId, 'TARGET ID:', roomId);
+
+      if (entryId && roomId) {
+        if (entryId === roomId) return true;
+        return false; // id present but no match — skip name fallback
+      }
+
+      // ── Step 2: Name fallback (only when entry has NO id at all) ──
+      const ename = norm(
+        e.roomName || e.room || e.classroom ||
+        e.hall || e.venue || ''
+      );
       return ename && rname && ename === rname;
     });
 
@@ -431,10 +582,15 @@ export function calcRoomUtilization(rooms, timetable, weeklyAvailableHours = 40)
       utilization >= 70  ? 'high'       :
       utilization > 0    ? 'normal'     : 'unused';
 
+    console.log(
+      `[calcRoomUtilization] "${rname}" (rid=${rid}):`,
+      `matched=${matched.length} | hours=${scheduledHours} | util=${utilization}%`
+    );
+
     return {
       roomId:         rid,
       roomName:       room.name || 'Unknown',
-      roomType:       room.type || '',
+      roomType:       room.type || room.roomType || '',
       capacity:       Number(room.capacity) || 0,
       scheduledHours,
       availableHours: avail,
@@ -555,8 +711,8 @@ export function calcWeeklyTrendFromSource(workingDays, timetable) {
 /* ═══════════════════════════════════════════════════════════════════════════
    computeAnalytics — unified entry-point used by AnalyticsDashboard
 ═══════════════════════════════════════════════════════════════════════════ */
-export function computeAnalytics(setup = {}, timetableEntries = [], teachers = [], rooms = [], subjects = []) {
-  const workload    = calcTeacherWorkload(teachers, timetableEntries);
+export function computeAnalytics(setup = {}, timetableEntries = [], lecturers = [], rooms = [], subjects = []) {
+  const workload    = calcLecturerWorkload(lecturers, timetableEntries);
   const roomUtil    = calcRoomUtilization(rooms, timetableEntries, setup.weeklyAvailableHours || 40);
   const subjectDist = calcSubjectDistribution(subjects, timetableEntries);
   const weeklyTrend = calcWeeklyTrend(timetableEntries);
@@ -571,11 +727,11 @@ export function computeAnalytics(setup = {}, timetableEntries = [], teachers = [
 export function generateInsights(workload = [], roomUtil = [], conflicts = [], subjectDist = []) {
   const insights = [];
 
-  workload.filter(t => t.status === 'overloaded').forEach(t => {
+  workload.filter(l => l.status === 'overloaded').forEach(l => {
     insights.push({
       type: 'warning', icon: '⚠️',
-      title: `${t.teacherName} is overloaded`,
-      desc:  `${t.totalHours}h/week (${(t.totalHours - t.maxWeeklyHours).toFixed(1)}h above the ${t.maxWeeklyHours}h limit).`,
+      title: `${l.lecturerName || l.teacherName} is overloaded`,
+      desc:  `${l.totalHours}h/week (${(l.totalHours - l.maxWeeklyHours).toFixed(1)}h above the ${l.maxWeeklyHours}h limit).`,
     });
   });
 
@@ -634,19 +790,45 @@ export function generateInsights(workload = [], roomUtil = [], conflicts = [], s
 ═══════════════════════════════════════════════════════════════════════════ */
 export function normaliseEntries(raw) {
   if (!Array.isArray(raw)) return [];
-  return raw.map(e => ({
-    ...e,
-    // Keep populated objects intact for resolveId / name extraction
-    teacherId: e.teacherId ?? e.lecturerId ?? e.facultyId ?? e.teacher ?? null,
-    roomId:    e.roomId ?? e.classroomId ?? e.room ?? null,
-    subjectId: e.subjectId ?? e.courseId ?? e.subject ?? null,
-    day:       e.day       || getDayName(e)     || '',
-    startTime: e.startTime || e.start || e.fromTime || e.timeslot?.startTime || parseSlotRange(e.slot || e.timeslot).startTime || '',
-    endTime:   e.endTime   || e.end   || e.toTime   || e.timeslot?.endTime   || parseSlotRange(e.slot || e.timeslot).endTime   || '',
-    teacherName: e.teacherName || getTeacherName(e) || '',
-    subjectName: e.subjectName || getSubjectName(e) || '',
-    roomName: e.roomName || getRoomName(e) || '',
-  }));
+  return raw.map(e => {
+    // ─────────────────────────────────────────────────────────────────────
+    // CRITICAL: preserve teacherId and roomId EXACTLY as they come from the
+    // backend (plain string ObjectIds). Do not transform them — the calc
+    // functions read them directly via String() coercion.
+    // ─────────────────────────────────────────────────────────────────────
+
+    // Compute raw id aliases without overwriting the original field values
+    const rawTeacherId  = e.teacherId  !== undefined ? e.teacherId  : (e.lecturerId ?? e.facultyId ?? e.teacher ?? null);
+    const rawLecturerId = e.lecturerId !== undefined ? e.lecturerId : (e.teacherId  ?? e.facultyId ?? e.teacher ?? null);
+    const rawRoomId     = e.roomId     !== undefined ? e.roomId     : (e.classroomId ?? e.room     ?? null);
+    const rawSubjectId  = e.subjectId  !== undefined ? e.subjectId  : (e.courseId   ?? e.subject  ?? null);
+
+    // Derive flat name strings from populated objects (used only as name-fallback)
+    const teacherNameFromId =
+      (typeof rawTeacherId  === 'object' && rawTeacherId?.name)  ||
+      (typeof rawLecturerId === 'object' && rawLecturerId?.name) || '';
+
+    const roomNameFromId =
+      (typeof rawRoomId === 'object' && (rawRoomId?.name || rawRoomId?.roomName)) || '';
+
+    return {
+      ...e,
+      // Re-emit id fields (plain string preserved or alias applied)
+      teacherId:    rawTeacherId,
+      lecturerId:   rawLecturerId,
+      roomId:       rawRoomId,
+      subjectId:    rawSubjectId,
+      // Time + day normalisation
+      day:       e.day       || getDayName(e) || '',
+      startTime: e.startTime || e.start || e.fromTime || e.timeslot?.startTime || parseSlotRange(e.slot || e.timeslot).startTime || '',
+      endTime:   e.endTime   || e.end   || e.toTime   || e.timeslot?.endTime   || parseSlotRange(e.slot || e.timeslot).endTime   || '',
+      // Flat name fields (safe for name-fallback matching)
+      lecturerName: e.lecturerName || e.teacherName || teacherNameFromId || '',
+      teacherName:  e.teacherName  || e.lecturerName || teacherNameFromId || '',
+      subjectName:  e.subjectName  || getSubjectName(e) || '',
+      roomName:     e.roomName     || roomNameFromId || getRoomName(e) || '',
+    };
+  });
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -679,13 +861,15 @@ export function getTimetableEntries(data) {
    LocalStorage helpers (kept for backward compat with AnalyticsDashboard)
 ───────────────────────────────────────────────────────────────────────── */
 
-function buildVirtualTeachers(raw) {
-  return normalizeArray(raw).map((t, i) => {
-    const name = typeof t === 'string' ? t : (t.name || t.teacherName || t.faculty || `Teacher ${i + 1}`);
+function buildVirtualLecturers(raw) {
+  return normalizeArray(raw).map((l, i) => {
+    const name = typeof l === 'string' ? l : (l.name || l.lecturerName || l.teacherName || l.faculty || `Lecturer ${i + 1}`);
     return {
       _id: name, id: name, name,
-      department:     typeof t === 'object' ? (t.department || '') : '',
-      maxWeeklyHours: toNumber(typeof t === 'object' ? t.maxWeeklyHours : undefined, 20),
+      lecturerId:     name,
+      lecturerName:   name,
+      department:     typeof l === 'object' ? (l.department || '') : '',
+      maxWeeklyHours: toNumber(typeof l === 'object' ? l.maxWeeklyHours : undefined, 20),
     };
   });
 }
@@ -717,9 +901,10 @@ export function loadAllDataSources() {
   const setup     = sp('ai_scheduling_setup', {});
   const analytics = sp('ai_analytics_data',   {});
 
-  let rawTeachers = normalizeArray(setup.teachers);
-  if (!rawTeachers.length) rawTeachers = normalizeArray(sp('teachers', []));
-  if (!rawTeachers.length) rawTeachers = normalizeArray(analytics.teachers);
+  let rawLecturers = normalizeArray(setup.lecturers || setup.teachers);
+  if (!rawLecturers.length) rawLecturers = normalizeArray(sp('lecturers', []));
+  if (!rawLecturers.length) rawLecturers = normalizeArray(sp('teachers', []));
+  if (!rawLecturers.length) rawLecturers = normalizeArray(analytics.lecturers || analytics.teachers);
 
   let rawRooms = normalizeArray(setup.rooms);
   if (!rawRooms.length) rawRooms = normalizeArray(sp('rooms', []));
@@ -738,7 +923,9 @@ export function loadAllDataSources() {
   const workingDays = normalizeArray(setup.workingDays || analytics.workingDays || []);
 
   return {
-    teachers:   buildVirtualTeachers(rawTeachers),
+    lecturers:  buildVirtualLecturers(rawLecturers),
+    // backward compat
+    teachers:   buildVirtualLecturers(rawLecturers),
     rooms:      buildVirtualRooms(rawRooms),
     subjects:   buildVirtualSubjects(rawSubjects),
     timetable:  normaliseEntries(rawTimetable),
@@ -753,20 +940,21 @@ export function loadFromLocalStorage() {
 }
 
 export function generateAnalyticsFromSource(setup = {}, analytics = {}) {
-  const teachers = buildVirtualTeachers(setup.teachers || []);
-  const rooms    = buildVirtualRooms(setup.rooms || []);
-  const subjects = buildVirtualSubjects(setup.subjects || []);
+  const lecturers = buildVirtualLecturers(setup.lecturers || setup.teachers || []);
+  const rooms     = buildVirtualRooms(setup.rooms || []);
+  const subjects  = buildVirtualSubjects(setup.subjects || []);
 
   let rawEntries = getTimetableEntries(setup);
   if (!rawEntries.length) rawEntries = getTimetableEntries(analytics);
   if (!rawEntries.length && Array.isArray(analytics.timetable)) rawEntries = analytics.timetable;
 
-  return { teachers, rooms, subjects, timetable: normaliseEntries(rawEntries) };
+  return { lecturers, teachers: lecturers, rooms, subjects, timetable: normaliseEntries(rawEntries) };
 }
 
 export function validateAnalyticsData(data = {}) {
   if (!data || typeof data !== 'object') return false;
   return (
+    (Array.isArray(data.lecturers) && data.lecturers.length > 0) ||
     (Array.isArray(data.teachers)  && data.teachers.length  > 0) ||
     (Array.isArray(data.rooms)     && data.rooms.length     > 0) ||
     (Array.isArray(data.timetable) && data.timetable.length > 0)
@@ -774,13 +962,13 @@ export function validateAnalyticsData(data = {}) {
 }
 
 /* AI scheduling — client-side fallback */
-export async function runAIScheduling(timetableData, teachers = [], rooms = [], subjects = []) {
+export async function runAIScheduling(timetableData, lecturers = [], rooms = [], subjects = []) {
   try {
     const res = await api.post('/ai/run', { timetable: timetableData });
     return res.data;
   } catch {
     const conflicts   = detectRoomConflicts(timetableData);
-    const workload    = calcTeacherWorkload(teachers, timetableData);
+    const workload    = calcLecturerWorkload(lecturers, timetableData);
     const roomUtil    = calcRoomUtilization(rooms, timetableData);
     const subjectDist = calcSubjectDistribution(subjects, timetableData);
     const insights    = generateInsights(workload, roomUtil, conflicts, subjectDist);

@@ -70,7 +70,7 @@ app.use('/api/users',      require('./routes/userRoutes'));
 app.use('/api/products',   require('./routes/productRoutes'));
 
 // Timetable Analytics Routes
-app.use('/api/teachers',   require('./routes/teacherRoutes'));
+app.use('/api/lecturers',  require('./routes/lecturerRoutes'));
 app.use('/api/subjects',   require('./routes/subjectRoutes'));
 app.use('/api/rooms',      require('./routes/roomRoutes'));
 app.use('/api/timetables', require('./routes/timetableRoutes'));
@@ -98,7 +98,7 @@ app.get('/api/health', (req, res) => {
     ],
     routes: [
       'GET  /api/health',
-      'GET  /api/teachers',
+      'GET  /api/lecturers',
       'GET  /api/subjects',
       'GET  /api/rooms',
       'GET  /api/timetables',

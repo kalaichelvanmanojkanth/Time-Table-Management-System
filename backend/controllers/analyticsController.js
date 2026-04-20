@@ -1,4 +1,4 @@
-const Teacher = require('../models/Teacher');
+const Lecturer = require('../models/Lecturer');
 const Subject = require('../models/Subject');
 const Room = require('../models/Room');
 const Timetable = require('../models/Timetable');
@@ -27,7 +27,7 @@ function extractName(value, fallback = '') {
 
 async function loadUnified() {
   const unified = await getUnifiedAnalyticsData({
-    TeacherModel: Teacher,
+    TeacherModel: Lecturer,
     SubjectModel: Subject,
     RoomModel: Room,
     TimetableModel: Timetable,
@@ -53,7 +53,7 @@ exports.getSummary = async (req, res) => {
     const payload = {
       success: true,
       data: {
-        teachers: unified.teachers.length,
+        lecturers:  unified.teachers.length,
         subjects: unified.subjects.length,
         rooms: unified.rooms.length,
         timetables: unified.timetableEntries.length,
@@ -98,8 +98,8 @@ exports.getWorkload = async (req, res) => {
       const status = totalHours > maxHrs ? 'overloaded' : totalHours < maxHrs * 0.5 ? 'underloaded' : 'optimal';
 
       return {
-        teacherId: tid,
-        teacherName: teacher.name,
+        lecturerId:     tid,
+        lecturerName:   teacher.name,
         department: teacher.department,
         totalHours,
         totalClasses: matched.length,
@@ -108,7 +108,7 @@ exports.getWorkload = async (req, res) => {
       };
     });
 
-    console.log(`[API] /analytics/workload → sending ${result.length} teacher workload records`);
+    console.log(`[API] /analytics/workload → sending ${result.length} lecturer workload records`);
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.status(200).json({ success: true, data: result, debug: unified.meta });
   } catch (err) {
