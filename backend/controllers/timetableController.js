@@ -16,6 +16,9 @@
 
 const Timetable = require('../models/Timetable');
 const AISetup   = require('../models/AISetup');
+const Teacher   = require('../models/Teacher');
+const Subject   = require('../models/Subject');
+const Room      = require('../models/Room');
 
 /* ──────────────────────────────────────────────────────────
    SHARED HELPERS
@@ -244,6 +247,53 @@ function autoOptimize(entries) {
    CONTROLLERS
 ══════════════════════════════════════════════════════════ */
 
+/* ──────────────────────────────────────────────────────────
+   LIVE NAME RESOLVER
+   Resolves raw ObjectId strings in subject/teacher/room fields
+   to human-readable names using the respective collections.
+   Works for both old data (has ObjectIds) and new data (has names).
+────────────────────────────────────────────────────────── */
+const IS_OBJECTID = /^[a-f\d]{24}$/i;
+
+async function resolveEntryNames(entries) {
+  if (!entries.length) return entries;
+
+  // Collect all ObjectId-looking values per field
+  const subjectIds = [...new Set(entries.map(e => e.subject).filter(v => IS_OBJECTID.test(String(v || ''))))];
+  const teacherIds = [...new Set(entries.map(e => e.teacher).filter(v => IS_OBJECTID.test(String(v || ''))))];
+  const roomIds    = [...new Set(entries.map(e => e.room   ).filter(v => IS_OBJECTID.test(String(v || ''))))];
+
+  // Also check the *Id backup fields for room (most common case)
+  const roomIdFields = [...new Set(entries.map(e => e.roomId).filter(v => v && IS_OBJECTID.test(String(v))))]
+  const allRoomIds   = [...new Set([...roomIds, ...roomIdFields])];
+
+  // Batch-lookup all at once
+  const [subjectDocs, teacherDocs, roomDocs] = await Promise.all([
+    subjectIds.length ? Subject.find({ _id: { $in: subjectIds } }).select('name').lean() : [],
+    teacherIds.length ? Teacher.find({ _id: { $in: teacherIds } }).select('name').lean() : [],
+    allRoomIds.length ? Room.find({    _id: { $in: allRoomIds  } }).select('name').lean() : [],
+  ]);
+
+  // Build lookup maps
+  const sMap = {}, tMap = {}, rMap = {};
+  for (const d of subjectDocs) sMap[String(d._id)] = d.name;
+  for (const d of teacherDocs) tMap[String(d._id)] = d.name;
+  for (const d of roomDocs)    rMap[String(d._id)] = d.name;
+
+  const resolve = (val, map) => {
+    if (!val) return val;
+    const s = String(val);
+    return IS_OBJECTID.test(s) ? (map[s] || s) : s;
+  };
+
+  return entries.map(e => ({
+    ...e,
+    subject: resolve(e.subject, sMap),
+    teacher: resolve(e.teacher, tMap),
+    room:    resolve(e.room, rMap) || resolve(e.roomId, rMap) || e.room,
+  }));
+}
+
 /* ── GET /api/timetables ── */
 const getTimetables = async (req, res) => {
   try {
@@ -254,9 +304,22 @@ const getTimetables = async (req, res) => {
     if (req.query.room)    filter.room    = new RegExp(req.query.room,    'i');
     if (req.query.status)  filter.status  = req.query.status;
 
-    const entries = await Timetable.find(filter)
+    const raw = await Timetable.find(filter)
       .sort({ day: 1, startTime: 1 })
       .lean();
+
+    // Resolve any ObjectId strings → readable names on the fly
+    const entries = await resolveEntryNames(raw);
+
+    // Debug: show first entry so you can verify names in server logs
+    if (entries.length > 0) {
+      const s = entries[0];
+      console.log(`[getTimetables] Returning ${entries.length} entries. Sample →`, {
+        subject: s.subject, teacher: s.teacher, room: s.room,
+      });
+    } else {
+      console.log('[getTimetables] 0 entries found');
+    }
 
     const grid = buildGrid(entries);
 
@@ -280,10 +343,14 @@ const getTimetables = async (req, res) => {
   }
 };
 
+
 /* ── GET /api/timetables/conflicts ── */
 const getConflicts = async (req, res) => {
   try {
-    const entries = await Timetable.find().lean();
+    const raw = await Timetable.find().sort({ createdAt: -1 }).lean();
+    // Resolve ObjectIds → names so conflict messages show readable text
+    const entries = await resolveEntryNames(raw);
+    console.log(`[getConflicts] Scanning ${entries.length} entries for conflicts`);
 
     if (!entries.length) {
       return res.json({
@@ -388,10 +455,40 @@ const seedFromSetup = async (req, res) => {
     if (!rooms.length)       return res.status(400).json({ success: false, message: 'Setup has no rooms' });
     if (!workingDays.length) return res.status(400).json({ success: false, message: 'Setup has no working days' });
 
+    /* 3. Resolve ObjectId strings → human-readable names
+       AISetup stores _id strings of Teacher/Subject/Room documents.
+       Fetch the actual names; fall back to the raw string if lookup fails.
+    */
+    const isObjectId = (v) => /^[a-f\d]{24}$/i.test(String(v));
+
+    const resolveNames = async (ids, Model, fieldName = 'name') => {
+      const validIds = ids.filter(isObjectId);
+      if (!validIds.length) {
+        // Already plain strings (names) — return as-is
+        return ids;
+      }
+      const docs = await Model.find({ _id: { $in: validIds } }).select(fieldName).lean();
+      const map   = {};
+      for (const d of docs) map[String(d._id)] = d[fieldName];
+      return ids.map(id => map[String(id)] || String(id)); // fallback = raw value
+    };
+
+    const [teacherNames, subjectNames, roomNames] = await Promise.all([
+      resolveNames(teachers, Teacher, 'name'),
+      resolveNames(subjects, Subject, 'name'),
+      resolveNames(rooms,    Room,    'name'),
+    ]);
+
+    console.log('[Seed] Resolved names →',
+      'teachers:', teacherNames,
+      'subjects:', subjectNames,
+      'rooms:',    roomNames
+    );
+
     const ts = Math.min(Math.max(Number(timeSlots) || 6, 1), 8);
     const HOURS = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00'];
 
-    /* 3. Generate entries (round-robin) */
+    /* 4. Generate entries (round-robin) using resolved names */
     const entries = [];
     let tIdx = 0, sIdx = 0, rIdx = 0;
 
@@ -400,13 +497,18 @@ const seedFromSetup = async (req, res) => {
         const startTime = HOURS[slot]     || `${String(8 + slot).padStart(2,'0')}:00`;
         const endTime   = HOURS[slot + 1] || `${String(9 + slot).padStart(2,'0')}:00`;
 
+        const subjectName = subjectNames[sIdx % subjectNames.length];
+        const teacherName = teacherNames[tIdx % teacherNames.length];
+        const roomName    = roomNames[rIdx   % roomNames.length];
+
         entries.push({
-          subject:   subjects[sIdx % subjects.length],
-          teacher:   teachers[tIdx % teachers.length],
-          room:      rooms[rIdx   % rooms.length],
-          subjectId: subjects[sIdx % subjects.length],
-          teacherId: teachers[tIdx % teachers.length],
-          roomId:    rooms[rIdx   % rooms.length],
+          subject:   subjectName,
+          teacher:   teacherName,
+          room:      roomName,
+          // Keep raw refs for traceability
+          subjectId: String(subjects[sIdx % subjects.length]),
+          teacherId: String(teachers[tIdx % teachers.length]),
+          roomId:    String(rooms[rIdx   % rooms.length]),
           day,
           startTime,
           endTime,
@@ -417,16 +519,16 @@ const seedFromSetup = async (req, res) => {
       }
     }
 
-    /* 4. Drop all existing entries first (prevents E11000) */
+    /* 5. Drop all existing entries first (prevents E11000) */
     console.log('[Seed] Clearing existing timetable entries…');
     await Timetable.deleteMany({});
 
-    /* 5. Drop any stale indexes that could cause conflicts, then recreate */
+    /* 6. Drop any stale indexes that could cause conflicts, then recreate */
     try {
       await Timetable.collection.dropIndexes();
     } catch (_) { /* ignore if no indexes to drop */ }
 
-    /* 6. Insert fresh entries */
+    /* 7. Insert fresh entries */
     console.log(`[Seed] Inserting ${entries.length} entries…`);
     const inserted = await Timetable.insertMany(entries, { ordered: false });
 
