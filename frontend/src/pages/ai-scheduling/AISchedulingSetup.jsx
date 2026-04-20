@@ -111,27 +111,32 @@ export default function AISchedulingSetup() {
   const [loadingResources, setLoadingResources] = useState(true);
   const [seedingResources, setSeedingResources] = useState(false);
 
-  /* ── Fetch teachers / subjects / rooms from MongoDB ── */
-  const fetchResources = useCallback(async () => {
-    setLoadingResources(true);
+  /* ── Fetch teachers / subjects / rooms from MongoDB ──
+     silent = true  → background poll: no spinner, no toasts
+  */
+  const fetchResources = useCallback(async (silent = false) => {
+    if (!silent) setLoadingResources(true);
     try {
       const [tRes, sRes, rRes] = await Promise.all([
         getTeachers(), getSubjects(), getRooms(),
       ]);
-      setDbTeachers(tRes.data?.data || []);
-      setDbSubjects(sRes.data?.data || []);
-      setDbRooms(rRes.data?.data   || []);
+      const teachers = tRes.data?.data || [];
+      const subjects = sRes.data?.data || [];
+      const rooms    = rRes.data?.data || [];
+      console.log('[Setup] fetchResources:', teachers.length, 'teachers,', subjects.length, 'subjects,', rooms.length, 'rooms', silent ? '(background poll)' : '(manual)');
+      setDbTeachers(teachers);
+      setDbSubjects(subjects);
+      setDbRooms(rooms);
     } catch (err) {
       console.warn('[Setup] fetchResources failed:', err.message);
-      toast.warning('Could not load resources from database — check backend connection', { autoClose: 3000 });
+      if (!silent) toast.warning('Could not load resources from database — check backend connection', { autoClose: 3000 });
     } finally {
-      setLoadingResources(false);
+      if (!silent) setLoadingResources(false);
     }
   }, []);
 
-  /* ── Load saved setup on mount, then fetch DB resources ── */
+  /* ── Load saved setup on mount (localStorage → MongoDB fallback) ── */
   useEffect(() => {
-    // Restore form from localStorage first
     const raw = localStorage.getItem(SETUP_KEY);
     if (raw) {
       try {
@@ -142,7 +147,6 @@ export default function AISchedulingSetup() {
         toast.error('Corrupted setup data cleared — please reconfigure');
       }
     } else {
-      // Try MongoDB fallback
       getLatestAISetup()
         .then(res => {
           const dbSetup = res.data?.data;
@@ -156,9 +160,15 @@ export default function AISchedulingSetup() {
         })
         .catch(() => { /* backend offline — normal on first run */ });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    // Always fetch DB resources
+  /* ── Initial resource load + 5-second auto-polling ── */
+  useEffect(() => {
     fetchResources();
+
+    const interval = setInterval(() => fetchResources(true), 5000);
+    return () => clearInterval(interval);
   }, [fetchResources]);
 
   /* ── Seed sample data (first-time setup helper) ── */
