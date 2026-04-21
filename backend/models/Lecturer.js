@@ -115,9 +115,12 @@ const lecturerSchema = new mongoose.Schema(
         },
       ],
     },
+    subjects: [{ type: String, trim: true }],
+    maxWeeklyHours: { type: Number, default: 20 },
   },
   {
     timestamps: true,
+    collection: 'lecturers'
   }
 );
 

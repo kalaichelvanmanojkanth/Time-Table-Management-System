@@ -25,31 +25,36 @@ import TimeTableDashboard from './pages/TimeTableDashboard';
 import UserClassroomPage from './pages/UserClassroomPage';
 import ViewTimeTable from './pages/ViewTimeTable';
 import Analytics from './pages/analytics/Analytics';
+import AnalyticsDashboard from './pages/analytics/AnalyticsDashboard';
 import Reports from './pages/analytics/Reports';
 import ResourceUtilization from './pages/analytics/ResourceUtilization';
 import SubjectDistribution from './pages/analytics/SubjectDistribution';
 import TeacherWorkload from './pages/analytics/TeacherWorkload';
+import AISchedulingSetup from './pages/AISchedulingSetup';
+import ConflictDetection from './pages/ConflictDetection';
+import OptimizationSuggestions from './pages/OptimizationSuggestions';
 
 function App() {
   const location = useLocation();
+  const { pathname } = location;
 
   const isAuthPage =
-    location.pathname === '/login' ||
-    location.pathname === '/register' ||
-    location.pathname === '/forgot-password';
-  const isHomePage = location.pathname === '/';
-  const isTimeTablePage = location.pathname.startsWith('/timetable');
-  const isRolePage =
-    location.pathname === '/user' || location.pathname === '/admin';
-  const isAnalyticsPage = location.pathname.startsWith('/analytics');
-  // Preserve the original Home page layout by not wrapping it with the app-level
-  // Navbar/Footer chrome that belongs to the other modules.
+    pathname === '/login' ||
+    pathname === '/register' ||
+    pathname === '/forgot-password';
+  const isHomePage = pathname === '/';
+  const isTimeTablePage = pathname.startsWith('/timetable');
+  const isRolePage = pathname === '/user' || pathname === '/admin';
+  const isAnalyticsPage = pathname.startsWith('/analytics');
+  const isAIPage = pathname.startsWith('/ai');
+
   const showGlobalChrome =
     !isAuthPage &&
     !isHomePage &&
     !isTimeTablePage &&
     !isRolePage &&
-    !isAnalyticsPage;
+    !isAnalyticsPage &&
+    !isAIPage;
 
   return (
     <div className={isRolePage ? 'role-layout' : 'app'}>
@@ -84,78 +89,30 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/register" element={<Register />} />
           <Route path="/products" element={<ProductList />} />
-          <Route
-            path="/products/create"
-            element={
-              <ProtectedRoute>
-                <CreateProduct />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/products/edit/:id"
-            element={
-              <ProtectedRoute>
-                <EditProduct />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/timetable"
-            element={
-              <ProtectedRoute>
-                <TimeTableDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/timetable/create"
-            element={
-              <ProtectedRoute>
-                <CreateTimeTable />
-              </ProtectedRoute>
-            }
-          />
+          
+          <Route path="/products/create" element={<ProtectedRoute><CreateProduct /></ProtectedRoute>} />
+          <Route path="/products/edit/:id" element={<ProtectedRoute><EditProduct /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/timetable" element={<ProtectedRoute><TimeTableDashboard /></ProtectedRoute>} />
+          <Route path="/timetable/create" element={<ProtectedRoute><CreateTimeTable /></ProtectedRoute>} />
           <Route path="/timetable/view" element={<ViewTimeTable />} />
-          <Route
-            path="/timetable/edit/:id"
-            element={
-              <ProtectedRoute>
-                <EditTimeTable />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/timetable/edit/:id" element={<ProtectedRoute><EditTimeTable /></ProtectedRoute>} />
           <Route path="/user" element={<UserClassroomPage />} />
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute>
-                <ClassroomManagementPage />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/admin" element={<ProtectedRoute><ClassroomManagementPage /></ProtectedRoute>} />
+          
+          {/* Analytics Routes */}
           <Route path="/analytics" element={<Analytics />} />
-          <Route
-            path="/analytics/teacher-workload"
-            element={<TeacherWorkload />}
-          />
-          <Route
-            path="/analytics/subject-distribution"
-            element={<SubjectDistribution />}
-          />
-          <Route
-            path="/analytics/resource-utilization"
-            element={<ResourceUtilization />}
-          />
+          <Route path="/analytics/dashboard" element={<AnalyticsDashboard />} />
+          <Route path="/analytics/teacher-workload" element={<TeacherWorkload />} />
+          <Route path="/analytics/subject-distribution" element={<SubjectDistribution />} />
+          <Route path="/analytics/resource-utilization" element={<ResourceUtilization />} />
           <Route path="/analytics/reports" element={<Reports />} />
+
+          {/* AI Scheduling Routes */}
+          <Route path="/ai/setup" element={<AISchedulingSetup />} />
+          <Route path="/ai/conflict-detection" element={<ConflictDetection />} />
+          <Route path="/ai/optimization" element={<OptimizationSuggestions />} />
+
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

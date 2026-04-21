@@ -7,29 +7,36 @@ const timetableSchema = new mongoose.Schema(
     courseId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Course',
-      required: [true, 'Course is required'],
+      required: false,
     },
     lecturerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Lecturer',
-      required: [true, 'Lecturer is required'],
+      required: false,
     },
     roomId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Room',
-      required: [true, 'Room is required'],
+      required: false,
     },
     timeslotId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'TimeSlot',
-      required: [true, 'Time slot is required'],
+      required: false,
     },
     week: {
       type: String,
-      required: [true, 'Week is required'],
+      required: false,
       trim: true,
       match: [WEEK_PATTERN, 'Week must follow the YYYY-Www format'],
     },
+
+    // Analytics/AI fields
+    subjectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Subject', required: false },
+    teacherId: { type: mongoose.Schema.Types.ObjectId, ref: 'Teacher', required: false },
+    day: { type: String, required: false },
+    startTime: { type: String, required: false },
+    endTime: { type: String, required: false },
   },
   {
     timestamps: true,

@@ -1,13 +1,18 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   FaArrowLeft, FaExclamationTriangle, FaCheckCircle, FaLightbulb,
   FaUserTie, FaClock, FaPlus, FaEdit, FaTrash, FaTimes,
-  FaTimesCircle, FaInfoCircle, FaSave,
+  FaTimesCircle, FaInfoCircle, FaSave, FaSync, FaSpinner,
 } from 'react-icons/fa';
 import { HiSparkles } from 'react-icons/hi2';
+import {
+  fetchLecturers, fetchTimetables, calcLecturerWorkload,
+  createLecturer, updateLecturer, deleteLecturer,
+  normalizeArray,
+} from '../../services/analyticsService';
 
-/* ── reveal hook ── */
+/* ── reveal ── */
 function useReveal() {
   const ref = useRef(null);
   useEffect(() => {
@@ -15,8 +20,7 @@ function useReveal() {
     const obs = new IntersectionObserver(([e]) => {
       if (e.isIntersecting) { el.classList.add('is-visible'); obs.unobserve(el); }
     }, { threshold: 0.1 });
-    obs.observe(el);
-    return () => obs.disconnect();
+    obs.observe(el); return () => obs.disconnect();
   }, []);
   return ref;
 }
@@ -25,15 +29,17 @@ function Reveal({ children, delay = '0ms' }) {
   return <div ref={ref} className="reveal-on-scroll" style={{ transitionDelay: delay }}>{children}</div>;
 }
 
-/* ══ TOAST ══ */
+/* ── toast ── */
 const T_STYLE = {
   success: { bar: 'bg-emerald-500', icon: 'text-emerald-500', ring: 'ring-emerald-100' },
   warning: { bar: 'bg-amber-400',   icon: 'text-amber-500',   ring: 'ring-amber-100'   },
   error:   { bar: 'bg-rose-500',    icon: 'text-rose-500',    ring: 'ring-rose-100'    },
   info:    { bar: 'bg-blue-500',    icon: 'text-blue-500',    ring: 'ring-blue-100'    },
 };
-const T_ICON = { success: <FaCheckCircle />, warning: <FaExclamationTriangle />, error: <FaTimesCircle />, info: <FaInfoCircle /> };
-
+const T_ICON = {
+  success: <FaCheckCircle />, warning: <FaExclamationTriangle />,
+  error: <FaTimesCircle />,   info: <FaInfoCircle />,
+};
 function Toast({ t, onDismiss }) {
   const [show, setShow] = useState(false);
   const s = T_STYLE[t.type];
@@ -82,51 +88,45 @@ function useToast() {
   };
 }
 
-/* ══ CONSTANTS ══ */
-const MAX_H = 20;
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const SLOTS = ['8:00–9:00', '9:00–10:00', '10:00–11:00', '11:00–12:00', '13:00–14:00', '14:00–15:00', '15:00–16:00', '16:00–17:00'];
-const CLASSES  = ['A401', 'A402', 'A403', 'A404', 'B501', 'B502', 'F1303', 'F1301'];
-const SUBJECTS      = ['ITPM', 'NDM', 'PAF', 'ESD', 'HCI', 'IAS', 'DS', 'DSA'];
-const DEPT_OPTIONS  = [
-  'Information Technology',
-  'Computer Science',
-  'Computer System Engineering',
-  'Computer System Networks',
+/* ── constants ── */
+const DEPT_OPTIONS = [
+  'Information Technology','Computer Science',
+  'Computer System Engineering','Computer System Networks',
 ];
-const TEACHER_OPTIONS = [
-  'Dr. Nimal Perera',
-  'Prof. Kasun Silva',
-  'Mr. Chamara Fernando',
-  'Ms. Dilani Jayawardena',
-  'Mr. Tharindu Wijesinghe',
-  'Ms. Sanduni Peris',
-  'Dr. Ruwan Gunasekara',
-  'Mr. Supun Herath',
-];
-
-const INITIAL = [
-  { id: 1, name: 'Dr. Anita Sharma',   dept: 'Computer Science', subject: 'Algorithms',      cls: 'CSE-A', hours: 22, max: MAX_H, days: ['Mon','Wed','Fri'], slots: ['8:00–9:00','9:00–10:00'] },
-  { id: 2, name: 'Prof. Ravi Kumar',   dept: 'Mathematics',      subject: 'Calculus',         cls: 'CSE-B', hours: 18, max: MAX_H, days: ['Tue','Thu'],       slots: ['10:00–11:00'] },
-  { id: 3, name: 'Dr. Preethi Nair',   dept: 'Computer Science', subject: 'Networks',         cls: 'CSE-A', hours: 14, max: MAX_H, days: ['Mon','Wed'],       slots: ['13:00–14:00'] },
-  { id: 4, name: 'Mr. Suresh Babu',    dept: 'Physics',          subject: 'Physics I',        cls: 'ECE-A', hours: 20, max: MAX_H, days: ['Mon','Tue','Thu'], slots: ['11:00–12:00'] },
-  { id: 5, name: 'Dr. Meera Krishnan', dept: 'Computer Science', subject: 'Databases',        cls: 'CSE-B', hours: 24, max: MAX_H, days: ['Mon','Tue','Wed','Thu','Fri'], slots: ['14:00–15:00','15:00–16:00'] },
-  { id: 6, name: 'Prof. Karthik Rajan',dept: 'Electronics',      subject: 'Digital Circuits', cls: 'ECE-B', hours: 10, max: MAX_H, days: ['Tue','Thu'],       slots: ['16:00–17:00'] },
-];
-
-const SUGGESTIONS = [
-  { icon: <FaLightbulb />, color: 'from-amber-500 to-orange-500', bg: 'bg-amber-50 border-amber-100', title: 'Redistribute Databases to Prof. Karthik Rajan', desc: 'Dr. Meera Krishnan is 4h over limit. Moving "Databases" to Prof. Karthik Rajan (10h/week) would balance both to ~18h.' },
-  { icon: <FaLightbulb />, color: 'from-blue-500 to-primary',     bg: 'bg-blue-50 border-blue-100',   title: 'Assign an elective to Dr. Preethi Nair',        desc: 'Dr. Preethi Nair is at 14h/week. Consider assigning the "Software Engineering" elective.' },
-  { icon: <FaCheckCircle />, color: 'from-emerald-500 to-teal-600', bg: 'bg-emerald-50 border-emerald-100', title: 'Prof. Ravi Kumar & Mr. Suresh Babu are well balanced', desc: 'Both are within the optimal 18–20h range. No action required.' },
-];
-
-function getStatus(h) { return h > MAX_H ? 'overloaded' : h < 12 ? 'underloaded' : 'optimal'; }
 
 const STATUS_META = {
   overloaded:  { label: 'Overloaded',  cls: 'bg-rose-100 text-rose-600 border border-rose-200' },
   optimal:     { label: 'Optimal',     cls: 'bg-emerald-100 text-emerald-600 border border-emerald-200' },
   underloaded: { label: 'Under-load',  cls: 'bg-amber-100 text-amber-600 border border-amber-200' },
 };
+
+const CHART_COLORS = [
+  '#6366f1', '#0ea5e9', '#10b981', '#ec4899',
+  '#8b5cf6', '#14b8a6', '#f97316', '#06b6d4',
+  '#84cc16', '#a855f7', '#fb7185', '#3b82f6',
+];
+
+function getBarColor(status, index) {
+  if (status === 'overloaded')  return '#ef4444';
+  if (status === 'underloaded') return '#f59e0b';
+  return CHART_COLORS[index % CHART_COLORS.length];
+}
+
+function getAvatarGradient(status, index) {
+  if (status === 'overloaded')  return 'from-rose-500 to-rose-400';
+  if (status === 'underloaded') return 'from-amber-400 to-amber-500';
+  const GRADIENTS = [
+    'from-indigo-500 to-violet-600',
+    'from-sky-500 to-cyan-400',
+    'from-emerald-500 to-teal-600',
+    'from-pink-500 to-rose-400',
+    'from-violet-500 to-purple-600',
+    'from-teal-500 to-emerald-400',
+    'from-orange-500 to-amber-400',
+    'from-cyan-500 to-blue-400',
+  ];
+  return GRADIENTS[index % GRADIENTS.length];
+}
 
 function HoursBar({ hours, max }) {
   const over = hours > max;
@@ -136,208 +136,305 @@ function HoursBar({ hours, max }) {
         <div className="absolute right-0 top-0 bottom-0 w-0.5 bg-slate-300 z-10" />
         <div className={`h-full rounded-full transition-all duration-700 ${over ? 'bg-gradient-to-r from-rose-500 to-rose-400' : 'bg-gradient-to-r from-primary to-accent'}`} style={{ width: `${Math.min((hours / max) * 100, 100)}%` }} />
       </div>
-      <span className={`text-xs font-bold w-12 text-right ${over ? 'text-rose-500' : 'text-muted'}`}>{hours}h / {max}h</span>
+      <span className={`text-xs font-bold w-14 text-right ${over ? 'text-rose-500' : 'text-muted'}`}>{hours}h / {max}h</span>
     </div>
   );
 }
 
-/* ══ EMPTY FORM ══ */
-const EMPTY_FORM = { name: '', dept: '', subject: '', cls: '', hours: '', days: [], slots: [] };
+const EMPTY_FORM = { name: '', department: '', subjects: '', maxWeeklyHours: '20' };
 
-/* ══ MAIN ══ */
-export default function TeacherWorkload() {
-  const [teachers, setTeachers] = useState(INITIAL);
-  const [filter, setFilter]     = useState('all');
-  const [view, setView]         = useState('cards'); // 'cards' | 'table'
-  const [modal, setModal]       = useState(null);    // null | 'add' | 'edit'
-  const [editId, setEditId]     = useState(null);
-  const [form, setForm]         = useState(EMPTY_FORM);
-  const [errors, setErrors]     = useState({});
-  const [delId, setDelId]       = useState(null);   // confirm-delete id
+/* ── Loading skeleton ── */
+function LoadingCard() {
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-md p-5 animate-pulse">
+      <div className="flex items-start gap-3 mb-3">
+        <div className="w-10 h-10 rounded-xl bg-slate-200 flex-shrink-0" />
+        <div className="flex-1">
+          <div className="h-4 bg-slate-200 rounded w-1/2 mb-2" />
+          <div className="h-3 bg-slate-100 rounded w-1/3" />
+        </div>
+      </div>
+      <div className="h-2 bg-slate-100 rounded-full" />
+    </div>
+  );
+}
+
+/* ── main ── */
+export default function LecturerWorkload() {
+  const [lecturers, setLecturers] = useState([]);
+  const [workload,  setWorkload]  = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [isDemo,    setIsDemo]    = useState(false);
+  const [saving,    setSaving]    = useState(false);
+  const [filter,    setFilter]    = useState('all');
+  const [view,      setView]      = useState('cards');
+  const [modal,     setModal]     = useState(null);
+  const [editId,    setEditId]    = useState(null);
+  const [form,      setForm]      = useState(EMPTY_FORM);
+  const [errors,    setErrors]    = useState({});
+  const [delId,     setDelId]     = useState(null);
   const { list, dismiss, toast } = useToast();
   const firstErrRef = useRef(null);
-  const teacherDropRef = useRef(null);
+
+  /* ── Load real data from backend ── */
+  const loadData = useCallback(async (showToast = false) => {
+    setLoading(true);
+    try {
+      const [lecs, tts] = await Promise.all([
+        fetchLecturers().catch(e => { console.error('[LecturerWorkload] fetchLecturers:', e.message); return []; }),
+        fetchTimetables().catch(e => { console.error('[LecturerWorkload] fetchTimetables:', e.message); return []; }),
+      ]);
+      const lecsArr = normalizeArray(lecs);
+      const ttsArr  = normalizeArray(tts);
+      setLecturers(lecsArr);
+      setWorkload(calcLecturerWorkload(lecsArr, ttsArr));
+      if (showToast) toast.success('Data synced from backend', 'Synced');
+    } catch (err) {
+      console.error('[LecturerWorkload] loadData error:', err.message);
+      toast.error(`Failed to load data: ${err.message}`, 'Error');
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  /* ── Demo-data fallback (presentation only) ─────────────────────────────
+   * Fires ONLY after loading completes and real backend returned nothing.
+   * If backend later returns real data, isDemo resets to false automatically.
+   * ──────────────────────────────────────────────────────────────────────── */
+  useEffect(() => {
+    if (loading) return;           // wait for real fetch to finish
+    if (workload.length > 0) {     // real data arrived → clear demo flag
+      setIsDemo(false);
+      return;
+    }
+    // No real workload data — inject realistic presentation data
+    setIsDemo(true);
+    setWorkload([
+      { lecturerId: 'd1', lecturerName: 'Dr. Nimal',    totalHours:  7, totalMinutes:  420, totalClasses: 5,  maxWeeklyHours: 20, department: 'Computer Science',            status: 'underloaded' },
+      { lecturerId: 'd2', lecturerName: 'Jana',         totalHours: 11, totalMinutes:  660, totalClasses: 8,  maxWeeklyHours: 20, department: 'Information Technology',       status: 'optimal'     },
+      { lecturerId: 'd3', lecturerName: 'Jaysooriya',   totalHours: 14, totalMinutes:  840, totalClasses: 10, maxWeeklyHours: 20, department: 'Computer System Engineering',  status: 'optimal'     },
+      { lecturerId: 'd4', lecturerName: 'Perera',       totalHours: 17, totalMinutes: 1020, totalClasses: 12, maxWeeklyHours: 20, department: 'Computer System Networks',     status: 'optimal'     },
+      { lecturerId: 'd5', lecturerName: 'Thilani',      totalHours: 22, totalMinutes: 1320, totalClasses: 16, maxWeeklyHours: 20, department: 'Information Technology',       status: 'overloaded'  },
+    ]);
+    if (lecturers.length === 0) {
+      setLecturers([
+        { _id: 'd1', name: 'Dr. Nimal',  department: 'Computer Science',           maxWeeklyHours: 20 },
+        { _id: 'd2', name: 'Jana',        department: 'Information Technology',      maxWeeklyHours: 20 },
+        { _id: 'd3', name: 'Jaysooriya', department: 'Computer System Engineering', maxWeeklyHours: 20 },
+        { _id: 'd4', name: 'Perera',     department: 'Computer System Networks',    maxWeeklyHours: 20 },
+        { _id: 'd5', name: 'Thilani',    department: 'Information Technology',      maxWeeklyHours: 20 },
+      ]);
+    }
+  }, [loading, workload.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── computed ── */
-  const withStatus = teachers.map(t => ({ ...t, status: getStatus(t.hours) }));
-  const filtered   = filter === 'all' ? withStatus : withStatus.filter(t => t.status === filter);
-  const overCount  = withStatus.filter(t => t.status === 'overloaded').length;
-  const underCount = withStatus.filter(t => t.status === 'underloaded').length;
+  const withStatus  = workload;
+  const filtered    = filter === 'all' ? withStatus : withStatus.filter(l => l.status === filter);
+  const overCount   = withStatus.filter(l => l.status === 'overloaded').length;
+  const underCount  = withStatus.filter(l => l.status === 'underloaded').length;
+  const avgHours    = workload.length
+    ? (workload.reduce((a, l) => a + l.totalHours, 0) / workload.length).toFixed(1)
+    : '0';
 
   const STATS = [
-    { label: 'Total Faculty',      value: teachers.length,  icon: <FaUserTie />,             color: 'text-primary',   bg: 'bg-blue-100'    },
-    { label: 'Avg Weekly Hours',   value: teachers.length ? Math.round(teachers.reduce((a,t)=>a+Number(t.hours),0)/teachers.length)+'h' : '0h', icon: <FaClock />, color: 'text-indigo-500', bg: 'bg-indigo-100' },
-    { label: 'Overloaded Faculty', value: overCount,        icon: <FaExclamationTriangle />, color: 'text-rose-500',  bg: 'bg-rose-100'    },
-    { label: 'Optimal Load',       value: withStatus.filter(t=>t.status==='optimal').length, icon: <FaCheckCircle />, color: 'text-emerald-500', bg: 'bg-emerald-100' },
+    { label: 'Total Faculty',      value: lecturers.length, icon: <FaUserTie />,             color: 'text-primary',   bg: 'bg-blue-100'    },
+    { label: 'Avg Weekly Hours',   value: `${avgHours}h`,   icon: <FaClock />,               color: 'text-indigo-500',bg: 'bg-indigo-100'  },
+    { label: 'Overloaded Faculty', value: overCount,        icon: <FaExclamationTriangle />,  color: 'text-rose-500',  bg: 'bg-rose-100'    },
+    { label: 'Optimal Load',       value: withStatus.filter(l=>l.status==='optimal').length, icon: <FaCheckCircle />, color: 'text-emerald-500', bg: 'bg-emerald-100' },
   ];
 
-  /* ── VALIDATION ── */
+  /* ── validation ── */
   function validate(f, currentId = null) {
     const e = {};
-    if (!f.dept)                              e.dept    = 'Department selection is required';
-    if (!f.name.trim())                       e.name    = 'Teacher selection is required';
-    if (!f.subject)                           e.subject = 'Subject selection is required';
-    if (!f.cls)                               e.cls     = 'Class selection is required';
-    if (!f.hours || Number(f.hours) <= 0)     e.hours   = 'Weekly hours must be greater than zero';
-    else if (Number(f.hours) > MAX_H)         e.hours   = `Weekly hours cannot exceed ${MAX_H} hours`;
-    if (f.days.length === 0)                  e.days    = 'Select at least one day';
-    if (f.slots.length === 0)                 e.slots   = 'Select at least one time slot';
-
-    // duplicate check: same teacher + subject + class
-    const dup = teachers.find(t =>
-      t.id !== currentId &&
-      t.name.trim().toLowerCase() === f.name.trim().toLowerCase() &&
-      t.subject.toLowerCase() === f.subject.toLowerCase() &&
-      t.cls === f.cls
+    if (!f.name.trim())           e.name           = 'Lecturer name is required';
+    if (!f.department)            e.department     = 'Department is required';
+    if (!f.maxWeeklyHours || Number(f.maxWeeklyHours) <= 0) e.maxWeeklyHours = 'Max weekly hours must be > 0';
+    const dup = lecturers.find(l =>
+      String(l._id) !== String(currentId) &&
+      (l.name || '').trim().toLowerCase() === f.name.trim().toLowerCase()
     );
-    if (dup) e.dup = 'Duplicate workload not allowed';
-
-    // overlapping slot check for same teacher (different record)
-    const sameTeacher = teachers.filter(t => t.id !== currentId && t.name.trim().toLowerCase() === f.name.trim().toLowerCase());
-    for (const t of sameTeacher) {
-      const dayOverlap  = f.days.some(d => t.days.includes(d));
-      const slotOverlap = f.slots.some(s => t.slots.includes(s));
-      if (dayOverlap && slotOverlap) {
-        e.overlap = `Time slot overlap detected (${t.subject} – ${t.cls})`;
-        break;
-      }
-    }
+    if (dup) e.name = 'A lecturer with this name already exists';
     return e;
   }
 
-  /* ── form is valid enough to enable Save ── */
-  const formReady = form.dept && form.name.trim() && form.subject && form.cls &&
-                    form.hours && Number(form.hours) > 0 && Number(form.hours) <= MAX_H &&
-                    form.days.length > 0 && form.slots.length > 0;
-
-  /* ── form helpers ── */
-  const toggleArr = (arr, val) => arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val];
-
-  // clear a single field's error when user corrects it
+  const formReady = form.name.trim() && form.department && form.maxWeeklyHours && Number(form.maxWeeklyHours) > 0;
   const clearErr = (key) => setErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
 
   function openAdd() {
     setForm(EMPTY_FORM); setErrors({}); setEditId(null); setModal('add');
-    toast.info('Fill in teacher workload details', 'Info', 3000);
-    setTimeout(() => teacherDropRef.current?.focus(), 100);
   }
-  function openEdit(t) {
-    setForm({ name: t.name, dept: t.dept, subject: t.subject, cls: t.cls, hours: String(t.hours), days: [...t.days], slots: [...t.slots] });
-    setErrors({}); setEditId(t.id); setModal('edit');
-    toast.info(`Editing workload for ${t.name}`, 'Info', 3000);
+  function openEdit(l) {
+    setForm({
+      name:           l.lecturerName || l.name || '',
+      department:     l.department   || '',
+      subjects:       '',
+      maxWeeklyHours: String(l.maxWeeklyHours || 20),
+    });
+    setErrors({});
+    setEditId(l.lecturerId || l._id || '');
+    setModal('edit');
   }
 
-  /* ── auto-scroll to first error ── */
-  function scrollToFirstError() {
-    setTimeout(() => firstErrRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
-  }
-
-  /* ── CREATE ── */
-  function handleCreate() {
+  /* ── CREATE — calls backend API ── */
+  async function handleCreate() {
     const e = validate(form);
-    if (Object.keys(e).length) { setErrors(e); scrollToFirstError(); return; }
-    const newT = { ...form, id: Date.now(), hours: Number(form.hours), max: MAX_H, days: form.days, slots: form.slots };
-    setTeachers(p => [...p, newT]);
-    setModal(null);
-    toast.success('Workload added successfully', 'Success');
+    if (Object.keys(e).length) {
+      setErrors(e);
+      setTimeout(() => firstErrRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = {
+        name:           form.name.trim(),
+        department:     form.department,
+        subjects:       form.subjects ? form.subjects.split(',').map(s => s.trim()).filter(Boolean) : [],
+        maxWeeklyHours: Number(form.maxWeeklyHours),
+      };
+      await createLecturer(payload);
+      setModal(null);
+      toast.success(`${form.name.trim()} added successfully`, 'Success');
+      await loadData();
+    } catch (err) {
+      console.error('[LecturerWorkload] createLecturer error:', err.message);
+      toast.error(`Failed to add lecturer: ${err.message}`, 'Error');
+    } finally {
+      setSaving(false);
+    }
   }
 
-  /* ── UPDATE ── */
-  function handleUpdate() {
+  /* ── UPDATE — calls backend API ── */
+  async function handleUpdate() {
     const e = validate(form, editId);
-    if (Object.keys(e).length) { setErrors(e); scrollToFirstError(); return; }
-    setTeachers(p => p.map(t => t.id === editId ? { ...t, ...form, hours: Number(form.hours) } : t));
-    setModal(null);
-    toast.success('Workload updated successfully', 'Success');
+    if (Object.keys(e).length) {
+      setErrors(e);
+      setTimeout(() => firstErrRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = {
+        name:           form.name.trim(),
+        department:     form.department,
+        maxWeeklyHours: Number(form.maxWeeklyHours),
+      };
+      await updateLecturer(editId, payload);
+      setModal(null);
+      toast.success('Lecturer updated successfully', 'Success');
+      await loadData();
+    } catch (err) {
+      console.error('[LecturerWorkload] updateLecturer error:', err.message);
+      toast.error(`Failed to update lecturer: ${err.message}`, 'Error');
+    } finally {
+      setSaving(false);
+    }
   }
 
-  /* ── DELETE ── */
-  function confirmDelete(id) {
-    const t = teachers.find(x => x.id === id);
-    if (!t) { toast.error('Record not found', 'Error'); return; }
-    setDelId(id);
-  }
-  function handleDelete() {
-    const t = teachers.find(x => x.id === delId);
-    setTeachers(p => p.filter(x => x.id !== delId));
-    setDelId(null);
-    toast.success('Workload deleted successfully', 'Success');
+  /* ── DELETE — calls backend API ── */
+  async function handleDelete() {
+    setSaving(true);
+    try {
+      await deleteLecturer(delId);
+      setDelId(null);
+      toast.success('Lecturer deleted successfully', 'Success');
+      await loadData();
+    } catch (err) {
+      console.error('[LecturerWorkload] deleteLecturer error:', err.message);
+      toast.error(`Failed to delete lecturer: ${err.message}`, 'Error');
+      setDelId(null);
+    } finally {
+      setSaving(false);
+    }
   }
 
-  /* ── filter with toast ── */
   function changeFilter(k) {
     setFilter(k);
-    if (k === 'overloaded' && overCount > 0) toast.warning(`${overCount} overloaded teacher(s) detected`, 'Warning');
-    if (k === 'underloaded' && underCount > 0) toast.warning(`${underCount} idle/under-loaded teacher(s)`, 'Warning');
+    if (k === 'overloaded'  && overCount  > 0) toast.warning(`${overCount} overloaded lecturer(s)`, 'Warning');
+    if (k === 'underloaded' && underCount > 0) toast.warning(`${underCount} under-loaded lecturer(s)`, 'Warning');
   }
 
-  /* ── on mount validation ── */
-  useEffect(() => {
-    toast.info('Loading teacher workload data…', 'Info', 2500);
-    const t = setTimeout(() => {
-      if (!teachers.length) { toast.error('No teacher data available', 'Error'); return; }
-      toast.success('Teacher workload data loaded successfully', 'Success', 3500);
-      setTimeout(() => {
-        if (overCount > 0)  toast.warning(`Overloaded teacher detected (${overCount} faculty)`, 'Warning', 5000);
-        if (underCount > 0) toast.warning(`Idle teacher detected (${underCount} faculty under 12h)`, 'Warning', 5500);
-        const hrs = teachers.map(x => x.hours);
-        if (Math.max(...hrs) - Math.min(...hrs) >= 8) toast.warning('Workload imbalance detected — review distribution', 'Warning', 6000);
-      }, 800);
-    }, 1200);
-    return () => clearTimeout(t);
-  }, []);
+  /* ── AI suggestions ── */
+  const suggestions = (() => {
+    const out = [];
+    withStatus.filter(l => l.status === 'overloaded').forEach(l => {
+      out.push({
+        icon: <FaExclamationTriangle />, color: 'from-rose-500 to-rose-400', bg: 'bg-rose-50 border-rose-100',
+        title: `${l.lecturerName} is overloaded`,
+        desc: `${l.totalHours}h assigned — ${(l.totalHours - l.maxWeeklyHours).toFixed(1)}h above limit. Consider redistributing subjects.`,
+      });
+    });
+    withStatus.filter(l => l.status === 'underloaded').forEach(l => {
+      out.push({
+        icon: <FaLightbulb />, color: 'from-amber-500 to-orange-500', bg: 'bg-amber-50 border-amber-100',
+        title: `${l.lecturerName} has spare capacity`,
+        desc: `Only ${l.totalHours}h assigned out of ${l.maxWeeklyHours}h. Consider assigning additional subjects.`,
+      });
+    });
+    if (!out.length) out.push({
+      icon: <FaCheckCircle />, color: 'from-emerald-500 to-teal-600', bg: 'bg-emerald-50 border-emerald-100',
+      title: 'All faculty loads are balanced',
+      desc: 'No over/under-load detected. Great timetable planning!',
+    });
+    return out;
+  })();
 
   const cardCls = (status) => {
     const base = 'bg-white rounded-2xl border shadow-md p-5 hover:shadow-lg transition-shadow';
     if (status === 'overloaded')  return `${base} border-rose-300 ring-1 ring-rose-200`;
     if (status === 'underloaded') return `${base} border-amber-200`;
-    return `${base} border-slate-100 dark:border-slate-700`;
+    return `${base} border-slate-100`;
   };
 
-  /* ══ RENDER ══ */
+  /* ── render ── */
   return (
-    <div className="min-h-screen bg-surface dark:bg-navy font-sans text-navy dark:text-slate-100 antialiased">
+    <div className="min-h-screen bg-surface font-sans text-navy antialiased">
       <Toasts list={list} dismiss={dismiss} />
 
-      {/* ── header ── */}
-      <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 px-5 sm:px-8 py-4 flex items-center gap-4 sticky top-0 z-40 shadow-sm flex-wrap">
+      {/* header */}
+      <header className="bg-white border-b border-slate-100 px-5 sm:px-8 py-4 flex items-center gap-4 sticky top-0 z-40 shadow-sm flex-wrap">
         <Link to="/analytics" id="back-to-analytics" className="inline-flex items-center gap-2 text-sm font-semibold text-muted hover:text-primary transition-colors">
           <FaArrowLeft className="text-xs" /> Analytics
         </Link>
         <span className="text-slate-300">/</span>
-        <span className="text-sm font-semibold text-navy dark:text-slate-200">Teacher Workload Analytics</span>
+        <span className="text-sm font-semibold">Lecturer Workload Analytics</span>
         <div className="ml-auto flex items-center gap-2 flex-wrap">
-          {/* view toggle */}
           <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-bold">
-            <button onClick={() => setView('cards')} className={`px-3 py-1.5 transition-colors ${view==='cards' ? 'bg-primary text-white' : 'bg-white text-muted hover:bg-slate-50'}`}>Cards</button>
-            <button onClick={() => setView('table')} className={`px-3 py-1.5 transition-colors ${view==='table' ? 'bg-primary text-white' : 'bg-white text-muted hover:bg-slate-50'}`}>Table</button>
+            <button onClick={() => setView('cards')} className={`px-3 py-1.5 transition-colors ${view==='cards'?'bg-primary text-white':'bg-white text-muted hover:bg-slate-50'}`}>Cards</button>
+            <button onClick={() => setView('table')} className={`px-3 py-1.5 transition-colors ${view==='table'?'bg-primary text-white':'bg-white text-muted hover:bg-slate-50'}`}>Table</button>
           </div>
-          {/* add */}
-          <button id="btn-add-teacher" onClick={openAdd} className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-full bg-primary text-white hover:bg-primary/90 transition-all shadow-sm">
-            <FaPlus className="text-[10px]" /> Add Workload
+          <button id="btn-sync" onClick={() => loadData(true)} title="Refresh" className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-full bg-slate-100 text-muted hover:bg-slate-200 transition-all" disabled={loading}>
+            {loading ? <FaSpinner className="animate-spin-slow text-[10px]" /> : <FaSync className="text-[10px]" />} Sync
           </button>
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-widest uppercase text-primary bg-blue-50 border border-blue-100 rounded-full px-3 py-1">
-            <HiSparkles /> Academic Analytics
-          </span>
+          <button id="btn-add-lecturer" onClick={openAdd} className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-1.5 rounded-full bg-primary text-white hover:bg-primary/90 transition-all shadow-sm">
+            <FaPlus className="text-[10px]" /> Add Lecturer
+          </button>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-5 sm:px-8 py-10 space-y-12">
 
-        {/* heading */}
         <Reveal>
           <h1 className="text-3xl sm:text-4xl font-extrabold leading-tight">
-            Teacher Workload{' '}
+            Lecturer Workload{' '}
             <span className="bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">Analytics</span>
           </h1>
-          <p className="mt-2 text-muted text-lg">Monitor teaching hours, identify overloaded faculty, and rebalance workloads across departments.</p>
+          <p className="mt-2 text-muted text-lg flex items-center gap-2">
+            Monitor teaching hours and identify overloaded faculty. Rebalance workloads with ease.
+            {isDemo && (
+              <span className="inline-block text-[11px] font-semibold text-slate-400 opacity-60 border border-slate-200 rounded-full px-2 py-0.5 ml-1">
+                Sample Data · Demo
+              </span>
+            )}
+          </p>
         </Reveal>
 
         {/* stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {STATS.map((s, i) => (
             <Reveal key={s.label} delay={`${i * 60}ms`}>
-              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-md p-5 flex items-center gap-4 hover:shadow-lg transition-shadow">
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-md p-5 flex items-center gap-4 hover:shadow-lg transition-shadow">
                 <div className={`w-12 h-12 rounded-xl ${s.bg} flex items-center justify-center ${s.color} text-lg flex-shrink-0`}>{s.icon}</div>
                 <div>
                   <div className={`text-2xl font-extrabold ${s.color}`}>{s.value}</div>
@@ -348,107 +445,104 @@ export default function TeacherWorkload() {
           ))}
         </div>
 
-        {/* filter pills + view */}
+        {/* filter pills + list */}
         <Reveal>
           <section>
             <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
               <div>
-                <h2 className="text-xl font-extrabold text-navy dark:text-white">Teaching Hours per Faculty</h2>
-                <p className="text-sm text-muted mt-0.5">Maximum allowed: {MAX_H}h/week per faculty member</p>
+                <h2 className="text-xl font-extrabold">Teaching Hours per Faculty</h2>
+                <p className="text-sm text-muted mt-0.5">
+                {loading
+                  ? 'Loading from backend…'
+                  : isDemo
+                    ? <span className="text-amber-500 font-medium">Demo data shown — no backend data available</span>
+                    : `${workload.length} lecturer(s) — live data from backend`
+                }
+              </p>
               </div>
               <div className="flex gap-2 flex-wrap">
                 {[
-                  { k:'all', l:'All', c: teachers.length },
+                  { k:'all',        l:'All',       c: withStatus.length },
                   { k:'overloaded', l:'Overloaded', c: overCount },
-                  { k:'optimal', l:'Optimal', c: withStatus.filter(t=>t.status==='optimal').length },
-                  { k:'underloaded', l:'Under-load', c: underCount },
+                  { k:'optimal',    l:'Optimal',    c: withStatus.filter(l=>l.status==='optimal').length },
+                  { k:'underloaded',l:'Under-load', c: underCount },
                 ].map(f => (
                   <button key={f.k} id={`filter-${f.k}`} onClick={() => changeFilter(f.k)}
-                    className={`text-xs font-bold px-3 py-1.5 rounded-full border transition-all duration-200 ${filter===f.k ? 'bg-primary text-white border-primary shadow-md' : 'bg-white text-muted border-slate-200 hover:border-primary'}`}>
+                    className={`text-xs font-bold px-3 py-1.5 rounded-full border transition-all ${filter===f.k?'bg-primary text-white border-primary shadow-md':'bg-white text-muted border-slate-200 hover:border-primary'}`}>
                     {f.l} ({f.c})
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* empty state */}
-            {filtered.length === 0 ? (
-              <div id="no-data-state" className="flex flex-col items-center justify-center py-16 text-muted">
-                <FaExclamationTriangle className="text-4xl text-slate-300 mb-3" />
-                <p className="font-semibold mb-3">No teacher data for this filter.</p>
-                <button onClick={openAdd} className="inline-flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-full bg-primary text-white hover:bg-primary/90 transition-all">
-                  <FaPlus /> Add Teacher Workload
-                </button>
+            {loading ? (
+              <div className="grid gap-4">
+                {[1,2,3].map(i => <LoadingCard key={i} />)}
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="py-12 text-center text-muted text-sm">
+                {workload.length === 0
+                  ? 'No lecturers found in the database. Add some using the "Add Lecturer" button.'
+                  : 'No lecturers match this filter.'}
               </div>
             ) : view === 'cards' ? (
-              /* ── CARD VIEW ── */
               <div className="grid gap-4">
-                {filtered.map((t, i) => {
-                  const meta = STATUS_META[t.status];
+                {filtered.map((l, i) => {
+                  const meta = STATUS_META[l.status];
                   return (
-                    <div key={t.id} id={`tc-${t.id}`} className={cardCls(t.status)} style={{ animationDelay: `${i*50}ms` }}>
+                    <div key={l.lecturerId || i} id={`lc-${l.lecturerId}`} className={cardCls(l.status)}>
                       <div className="flex flex-wrap items-start gap-3 mb-3">
-                        <div className={`w-10 h-10 rounded-xl text-white flex items-center justify-center text-sm font-bold flex-shrink-0 ${t.status==='overloaded'?'bg-gradient-to-br from-rose-500 to-rose-400':t.status==='underloaded'?'bg-gradient-to-br from-amber-400 to-amber-500':'bg-gradient-to-br from-primary to-secondary'}`}>
-                          {t.name.split(' ').map(w=>w[0]).slice(0,2).join('')}
+                        <div className={`w-10 h-10 rounded-xl text-white flex items-center justify-center text-sm font-bold flex-shrink-0 bg-gradient-to-br ${getAvatarGradient(l.status, i)}`}>
+                          {(l.lecturerName || '').split(' ').map(w=>w[0]).slice(0,2).join('')}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-bold text-sm">{t.name}</span>
+                            <span className="font-bold text-sm">{l.lecturerName}</span>
                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${meta.cls}`}>{meta.label}</span>
-                            {t.status==='underloaded' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200">Idle Risk</span>}
                           </div>
-                          <div className="text-xs text-muted mt-0.5">{t.dept} · {t.subject} · {t.cls}</div>
-                          <div className="text-xs text-muted mt-0.5">Days: {t.days.join(', ')} | Slots: {t.slots.join(', ')}</div>
+                          <div className="text-xs text-muted mt-0.5">{l.department}</div>
                         </div>
-                        {t.status==='overloaded' && (
+                        {l.status === 'overloaded' && (
                           <div className="flex items-center gap-1 text-xs font-bold text-rose-500 bg-rose-50 border border-rose-100 rounded-lg px-2 py-1">
-                            <FaExclamationTriangle className="text-[10px]" />+{t.hours-t.max}h over
+                            <FaExclamationTriangle className="text-[10px]" />+{(l.totalHours - l.maxWeeklyHours).toFixed(1)}h over
                           </div>
                         )}
                         <div className="flex gap-1.5">
-                          <button id={`edit-${t.id}`} onClick={() => openEdit(t)} className="w-8 h-8 rounded-lg bg-blue-50 text-primary hover:bg-blue-100 flex items-center justify-center transition-colors" title="Edit"><FaEdit className="text-xs" /></button>
-                          <button id={`del-${t.id}`} onClick={() => confirmDelete(t.id)} className="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 flex items-center justify-center transition-colors" title="Delete"><FaTrash className="text-xs" /></button>
+                          <button id={`edit-${l.lecturerId}`} onClick={() => openEdit(l)} className="w-8 h-8 rounded-lg bg-blue-50 text-primary hover:bg-blue-100 flex items-center justify-center transition-colors" title="Edit"><FaEdit className="text-xs" /></button>
+                          <button id={`del-${l.lecturerId}`}  onClick={() => setDelId(l.lecturerId || l._id)} className="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 flex items-center justify-center transition-colors" title="Delete"><FaTrash className="text-xs" /></button>
                         </div>
                       </div>
-                      <HoursBar hours={t.hours} max={t.max} />
-                      <div className="flex flex-wrap gap-1.5 mt-3">
-                        {t.slots.map(s => <span key={s} className="text-[10px] font-semibold bg-slate-100 text-muted rounded-full px-2.5 py-0.5">{s}</span>)}
-                      </div>
+                      <HoursBar hours={l.totalHours} max={l.maxWeeklyHours} />
                     </div>
                   );
                 })}
               </div>
             ) : (
-              /* ── TABLE VIEW ── */
-              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-md overflow-hidden">
+              /* table view */
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-md overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700">
+                    <thead className="bg-slate-50 border-b border-slate-100">
                       <tr>
-                        {['Teacher','Dept','Subject','Class','Days','Hours','Status','Actions'].map(h => (
+                        {['Lecturer','Department','Hours','Max Hrs','Status','Actions'].map(h => (
                           <th key={h} className="text-left text-[10px] font-extrabold uppercase tracking-widest text-muted px-4 py-3">{h}</th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-50 dark:divide-slate-700">
-                      {filtered.map(t => {
-                        const meta = STATUS_META[t.status];
+                    <tbody className="divide-y divide-slate-50">
+                      {filtered.map((l, i) => {
+                        const meta = STATUS_META[l.status];
                         return (
-                          <tr key={t.id} className={`hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors ${t.status==='overloaded'?'bg-rose-50/30':t.status==='underloaded'?'bg-amber-50/30':''}`}>
-                            <td className="px-4 py-3 font-semibold text-navy dark:text-slate-100 whitespace-nowrap">{t.name}</td>
-                            <td className="px-4 py-3 text-muted text-xs">{t.dept}</td>
-                            <td className="px-4 py-3 text-xs">{t.subject}</td>
-                            <td className="px-4 py-3 text-xs">{t.cls}</td>
-                            <td className="px-4 py-3 text-xs">{t.days.join(', ')}</td>
-                            <td className="px-4 py-3">
-                              <span className={`text-xs font-bold ${t.hours>t.max?'text-rose-500':t.hours<12?'text-amber-500':'text-emerald-600'}`}>{t.hours}h</span>
-                              <span className="text-[10px] text-muted">/{t.max}h</span>
-                            </td>
+                          <tr key={l.lecturerId || i} className={`hover:bg-slate-50 transition-colors ${l.status==='overloaded'?'bg-rose-50/30':l.status==='underloaded'?'bg-amber-50/30':''}`}>
+                            <td className="px-4 py-3 font-semibold whitespace-nowrap">{l.lecturerName}</td>
+                            <td className="px-4 py-3 text-xs text-muted">{l.department}</td>
+                            <td className="px-4 py-3"><span className={`text-xs font-bold ${l.totalHours>l.maxWeeklyHours?'text-rose-500':'text-emerald-600'}`}>{l.totalHours}h</span></td>
+                            <td className="px-4 py-3 text-xs text-muted">{l.maxWeeklyHours}h</td>
                             <td className="px-4 py-3"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${meta.cls}`}>{meta.label}</span></td>
                             <td className="px-4 py-3">
                               <div className="flex gap-1.5">
-                                <button onClick={() => openEdit(t)} className="w-7 h-7 rounded-lg bg-blue-50 text-primary hover:bg-blue-100 flex items-center justify-center transition-colors"><FaEdit className="text-[10px]" /></button>
-                                <button onClick={() => confirmDelete(t.id)} className="w-7 h-7 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 flex items-center justify-center transition-colors"><FaTrash className="text-[10px]" /></button>
+                                <button onClick={() => openEdit(l)} className="w-7 h-7 rounded-lg bg-blue-50 text-primary hover:bg-blue-100 flex items-center justify-center transition-colors"><FaEdit className="text-[10px]" /></button>
+                                <button onClick={() => setDelId(l.lecturerId || l._id)} className="w-7 h-7 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 flex items-center justify-center transition-colors"><FaTrash className="text-[10px]" /></button>
                               </div>
                             </td>
                           </tr>
@@ -462,49 +556,48 @@ export default function TeacherWorkload() {
           </section>
         </Reveal>
 
-        {/* weekly chart */}
-        <Reveal>
-          <section className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-xl p-6 sm:p-8">
-            <h2 className="text-xl font-extrabold text-navy dark:text-white mb-1">Weekly Workload Comparison</h2>
-            <p className="text-sm text-muted mb-6">Current teaching hours per faculty vs {MAX_H}h limit</p>
-            <div className="flex items-end gap-2 h-44 overflow-x-auto">
-              {withStatus.map((t, i) => (
-                <div key={t.id} className="flex-1 min-w-[52px] flex flex-col items-center gap-1">
-                  <div className="w-full flex items-end h-36">
-                    <div
-                      className={`w-full rounded-t-md transition-all duration-700 hover:opacity-80 ${t.status==='overloaded'?'bg-rose-400':t.status==='underloaded'?'bg-amber-300':'bg-gradient-to-t from-primary to-secondary'}`}
-                      style={{ height: `${Math.min((t.hours / 28) * 100, 100)}%` }}
-                      title={`${t.name}: ${t.hours}h`}
-                    />
+        {/* weekly bar chart */}
+        {workload.length > 0 && (
+          <Reveal>
+            <section className="bg-white rounded-3xl border border-slate-100 shadow-xl p-6 sm:p-8">
+              <h2 className="text-xl font-extrabold mb-1">Weekly Workload Comparison</h2>
+              <p className="text-sm text-muted mb-6">Teaching hours vs max weekly limit</p>
+              <div className="flex items-end gap-2 h-44 overflow-x-auto">
+                {withStatus.map((l, i) => (
+                  <div key={l.lecturerId || i} className="flex-1 min-w-[52px] flex flex-col items-center gap-1">
+                    <div className="w-full flex items-end h-36">
+                      <div
+                        className="w-full rounded-t-md transition-all duration-700 hover:opacity-80"
+                        style={{
+                          height: `${Math.min(((l.totalHours) / (l.maxWeeklyHours * 1.4)) * 100, 100)}%`,
+                          minHeight: '4px',
+                          backgroundColor: getBarColor(l.status, i),
+                        }}
+                        title={`${l.lecturerName}: ${l.totalHours}h`}
+                      />
+                    </div>
+                    <span className="text-[8px] font-semibold text-muted text-center leading-tight">{(l.lecturerName || '').split(' ')[0]}</span>
                   </div>
-                  <span className="text-[8px] font-semibold text-muted text-center leading-tight">{t.name.split(' ')[0]}</span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 flex items-center gap-2 text-xs text-muted">
-              <div className="w-6 border-t-2 border-dashed border-slate-300" />
-              <span>{MAX_H}h/week = maximum allowed workload</span>
-            </div>
-          </section>
-        </Reveal>
+                ))}
+              </div>
+            </section>
+          </Reveal>
+        )}
 
         {/* overloaded alerts */}
         {overCount > 0 && (
           <Reveal>
             <section>
-              <h2 className="text-xl font-extrabold mb-4">
-                <FaExclamationTriangle className="inline text-rose-500 mr-2" />Overloaded Teacher Alerts
-              </h2>
+              <h2 className="text-xl font-extrabold mb-4"><FaExclamationTriangle className="inline text-rose-500 mr-2" />Overloaded Lecturer Alerts</h2>
               <div className="grid sm:grid-cols-2 gap-4">
-                {withStatus.filter(t=>t.status==='overloaded').map((t,i) => (
-                  <Reveal key={t.id} delay={`${i*80}ms`}>
+                {withStatus.filter(l=>l.status==='overloaded').map((l,i) => (
+                  <Reveal key={l.lecturerId || i} delay={`${i*80}ms`}>
                     <div className="bg-rose-50 border border-rose-200 rounded-2xl p-5">
                       <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-rose-400 text-white flex items-center justify-center text-sm font-bold">{t.name.split(' ').map(w=>w[0]).slice(0,2).join('')}</div>
-                        <div><div className="font-bold text-sm">{t.name}</div><div className="text-xs text-muted">{t.dept}</div></div>
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-rose-400 text-white flex items-center justify-center text-sm font-bold">{(l.lecturerName || '').split(' ').map(w=>w[0]).slice(0,2).join('')}</div>
+                        <div><div className="font-bold text-sm">{l.lecturerName}</div><div className="text-xs text-muted">{l.department}</div></div>
                       </div>
-                      <div className="text-sm text-rose-700 font-semibold mb-1">⚠ {t.hours}h assigned — {t.hours-t.max}h above limit</div>
-                      <div className="text-xs text-rose-600">Subject: {t.subject} · Class: {t.cls}</div>
+                      <div className="text-sm text-rose-700 font-semibold mb-1">⚠ {l.totalHours}h — {(l.totalHours-l.maxWeeklyHours).toFixed(1)}h above limit</div>
                       <div className="mt-2 text-[11px] font-bold text-rose-500 bg-rose-100 border border-rose-200 rounded-lg px-3 py-1.5 inline-block">Action Required: Reassign or reduce load</div>
                     </div>
                   </Reveal>
@@ -514,14 +607,14 @@ export default function TeacherWorkload() {
           </Reveal>
         )}
 
-        {/* suggestions */}
+        {/* AI suggestions */}
         <Reveal>
           <section className="pb-10">
-            <h2 className="text-xl font-extrabold mb-1">Workload Balance Suggestions</h2>
-            <p className="text-sm text-muted mb-6">AI-generated recommendations to optimize faculty workload.</p>
+            <h2 className="text-xl font-extrabold mb-1">AI Workload Insights</h2>
+            <p className="text-sm text-muted mb-6">Recommendations based on live timetable data from backend.</p>
             <div className="grid gap-4">
-              {SUGGESTIONS.map((s,i) => (
-                <Reveal key={s.title} delay={`${i*80}ms`}>
+              {suggestions.map((s,i) => (
+                <Reveal key={i} delay={`${i*80}ms`}>
                   <div className={`flex gap-4 rounded-2xl border p-5 ${s.bg} hover:shadow-md transition-all`}>
                     <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${s.color} text-white flex items-center justify-center text-sm flex-shrink-0`}>{s.icon}</div>
                     <div><div className="font-bold text-sm mb-1">{s.title}</div><div className="text-xs text-muted leading-relaxed">{s.desc}</div></div>
@@ -533,171 +626,96 @@ export default function TeacherWorkload() {
         </Reveal>
       </main>
 
-      {/* ══ ADD / EDIT MODAL ══ */}
+      {/* ── Add / Edit Modal ── */}
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/50 backdrop-blur-sm" onClick={e => { if(e.target===e.currentTarget) setModal(null); }}>
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100 dark:border-slate-700">
-              <h3 className="text-lg font-extrabold">{modal==='add' ? '+ Add Teacher Workload' : '✎ Edit Teacher Workload'}</h3>
-              <button onClick={() => setModal(null)} className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-colors"><FaTimes className="text-xs" /></button>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100">
+              <h3 className="text-lg font-extrabold">{modal==='add'?'+ Add Lecturer':'✎ Edit Lecturer'}</h3>
+              <button onClick={() => setModal(null)} className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center"><FaTimes className="text-xs" /></button>
             </div>
             <div className="px-6 py-5 space-y-4" ref={firstErrRef}>
-
-              {/* global errors (dup / overlap) */}
-              {errors.dup    && <div className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-4 py-2 tw-fade-in">⚠ {errors.dup}</div>}
-              {errors.overlap && <div className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-4 py-2 tw-fade-in">⚠ {errors.overlap}</div>}
-
-              {/* row: name / dept */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-muted mb-1">Teacher Name *</label>
-                  <select
-                    id="field-name"
-                    ref={teacherDropRef}
-                    value={form.name}
-                    onChange={e => { setForm(p => ({ ...p, name: e.target.value })); clearErr('name'); }}
-                    className={`w-full px-3 py-2 text-sm border rounded-lg outline-none transition-all ${errors.name ? 'border-rose-400 bg-rose-50' : 'border-slate-200 focus:border-primary'}`}
-                  >
-                    <option value="" disabled>Select Teacher</option>
-                    {TEACHER_OPTIONS.map(n => <option key={n} value={n}>{n}</option>)}
-                  </select>
-                  {errors.name
-                    ? <p className="text-[10px] text-rose-500 mt-1 tw-fade-in flex items-center gap-1"><FaExclamationTriangle className="flex-shrink-0" />{errors.name}</p>
-                    : <p className="text-[10px] text-slate-400 mt-1">Select teacher to calculate workload analytics</p>
-                  }
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-muted mb-1">Department *</label>
-                  <select
-                    id="field-dept"
-                    value={form.dept}
-                    onChange={e => { setForm(p => ({ ...p, dept: e.target.value })); clearErr('dept'); }}
-                    className={`w-full px-3 py-2 text-sm border rounded-lg outline-none transition-all ${errors.dept ? 'border-rose-400 bg-rose-50' : 'border-slate-200 focus:border-primary'}`}
-                  >
-                    <option value="" disabled>Select Department</option>
-                    {DEPT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                  {errors.dept
-                    ? <p className="text-[10px] text-rose-500 mt-1 tw-fade-in flex items-center gap-1"><FaExclamationTriangle className="flex-shrink-0" />{errors.dept}</p>
-                    : <p className="text-[10px] text-slate-400 mt-1">Department affects workload analytics</p>
-                  }
-                </div>
-              </div>
-
-              {/* row: subject / class */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-muted mb-1">Subject *</label>
-                  <select
-                    id="field-subject"
-                    value={form.subject}
-                    onChange={e => { setForm(p => ({ ...p, subject: e.target.value })); clearErr('subject'); }}
-                    className={`w-full px-3 py-2 text-sm border rounded-lg outline-none transition-all ${errors.subject ? 'border-rose-400 bg-rose-50' : 'border-slate-200 focus:border-primary'}`}
-                  >
-                    <option value="">Select Subject</option>
-                    {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                  {errors.subject && <p className="text-[10px] text-rose-500 mt-1 tw-fade-in flex items-center gap-1"><FaExclamationTriangle className="flex-shrink-0" />{errors.subject}</p>}
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-muted mb-1">Class *</label>
-                  <select
-                    id="field-class"
-                    value={form.cls}
-                    onChange={e => { setForm(p => ({ ...p, cls: e.target.value })); clearErr('cls'); }}
-                    className={`w-full px-3 py-2 text-sm border rounded-lg outline-none transition-all ${errors.cls ? 'border-rose-400 bg-rose-50' : 'border-slate-200 focus:border-primary'}`}
-                  >
-                    <option value="">Select Class</option>
-                    {CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  {errors.cls && <p className="text-[10px] text-rose-500 mt-1 tw-fade-in flex items-center gap-1"><FaExclamationTriangle className="flex-shrink-0" />{errors.cls}</p>}
-                </div>
-              </div>
-
-              {/* hours */}
+              {/* name */}
               <div>
-                <label className="block text-xs font-bold text-muted mb-1">Weekly Hours * <span className="font-normal">(max {MAX_H}h)</span></label>
+                <label className="block text-xs font-bold text-muted mb-1">Full Name *</label>
                 <input
-                  id="field-hours" type="number" min="1" max={MAX_H}
-                  value={form.hours}
-                  onChange={e => { setForm(p => ({ ...p, hours: e.target.value })); clearErr('hours'); }}
-                  onKeyDown={e => { if (['-', 'e', '+', '.'].includes(e.key)) e.preventDefault(); }}
-                  className={`w-full px-3 py-2 text-sm border rounded-lg outline-none transition-all ${errors.hours ? 'border-rose-400 bg-rose-50' : 'border-slate-200 focus:border-primary'}`}
-                  placeholder="e.g. 16"
+                  id="field-name" value={form.name}
+                  onChange={e => { setForm(p=>({...p,name:e.target.value})); clearErr('name'); }}
+                  className={`w-full px-3 py-2 text-sm border rounded-lg outline-none transition-all ${errors.name?'border-rose-400 bg-rose-50':'border-slate-200 focus:border-primary'}`}
+                  placeholder="e.g. Dr. Nimal Perera"
                 />
-                {errors.hours
-                  ? <p className="text-[10px] text-rose-500 mt-1 tw-fade-in flex items-center gap-1"><FaExclamationTriangle className="flex-shrink-0" />{errors.hours}</p>
-                  : form.hours && Number(form.hours) > MAX_H - 2 && Number(form.hours) <= MAX_H &&
-                    <p className="text-[10px] text-amber-500 mt-1">⚠ Near maximum limit</p>
-                }
+                {errors.name && <p className="text-[10px] text-rose-500 mt-1 flex items-center gap-1"><FaExclamationTriangle className="flex-shrink-0"/>{errors.name}</p>}
               </div>
-
-              {/* days */}
+              {/* department */}
               <div>
-                <label className="block text-xs font-bold text-muted mb-2">Assigned Days *</label>
-                <div className="flex flex-wrap gap-2">
-                  {DAYS.map(d => (
-                    <button key={d} type="button"
-                      onClick={() => { setForm(p => ({ ...p, days: toggleArr(p.days, d) })); clearErr('days'); }}
-                      className={`text-xs font-bold px-3 py-1.5 rounded-full border transition-colors ${form.days.includes(d) ? 'bg-primary text-white border-primary' : 'bg-white text-muted border-slate-200 hover:border-primary'}`}>
-                      {d}
-                    </button>
-                  ))}
-                </div>
-                {errors.days && <p className="text-[10px] text-rose-500 mt-1 tw-fade-in flex items-center gap-1"><FaExclamationTriangle className="flex-shrink-0" />{errors.days}</p>}
+                <label className="block text-xs font-bold text-muted mb-1">Department *</label>
+                <select
+                  id="field-dept" value={form.department}
+                  onChange={e => { setForm(p=>({...p,department:e.target.value})); clearErr('department'); }}
+                  className={`w-full px-3 py-2 text-sm border rounded-lg outline-none transition-all ${errors.department?'border-rose-400 bg-rose-50':'border-slate-200 focus:border-primary'}`}
+                >
+                  <option value="" disabled>Select Department</option>
+                  {DEPT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+                {errors.department && <p className="text-[10px] text-rose-500 mt-1 flex items-center gap-1"><FaExclamationTriangle className="flex-shrink-0"/>{errors.department}</p>}
               </div>
-
-              {/* slots */}
+              {/* subjects */}
               <div>
-                <label className="block text-xs font-bold text-muted mb-2">Time Slots *</label>
-                <div className="flex flex-wrap gap-2">
-                  {SLOTS.map(s => (
-                    <button key={s} type="button"
-                      onClick={() => { setForm(p => ({ ...p, slots: toggleArr(p.slots, s) })); clearErr('slots'); }}
-                      className={`text-xs font-bold px-3 py-1.5 rounded-full border transition-colors ${form.slots.includes(s) ? 'bg-primary text-white border-primary' : 'bg-white text-muted border-slate-200 hover:border-primary'}`}>
-                      {s}
-                    </button>
-                  ))}
-                </div>
-                {errors.slots && <p className="text-[10px] text-rose-500 mt-1 tw-fade-in flex items-center gap-1"><FaExclamationTriangle className="flex-shrink-0" />{errors.slots}</p>}
+                <label className="block text-xs font-bold text-muted mb-1">Subjects <span className="font-normal">(comma-separated, optional)</span></label>
+                <input
+                  id="field-subjects" value={form.subjects}
+                  onChange={e => setForm(p=>({...p,subjects:e.target.value}))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:border-primary transition-all"
+                  placeholder="e.g. Algorithms, Data Structures"
+                />
+              </div>
+              {/* max hours */}
+              <div>
+                <label className="block text-xs font-bold text-muted mb-1">Max Weekly Hours *</label>
+                <input
+                  id="field-maxhours" type="number" min="1" max="40" value={form.maxWeeklyHours}
+                  onChange={e => { setForm(p=>({...p,maxWeeklyHours:e.target.value})); clearErr('maxWeeklyHours'); }}
+                  onKeyDown={e => ['-','e','+','.'].includes(e.key) && e.preventDefault()}
+                  className={`w-full px-3 py-2 text-sm border rounded-lg outline-none transition-all ${errors.maxWeeklyHours?'border-rose-400 bg-rose-50':'border-slate-200 focus:border-primary'}`}
+                  placeholder="e.g. 20"
+                />
+                {errors.maxWeeklyHours && <p className="text-[10px] text-rose-500 mt-1 flex items-center gap-1"><FaExclamationTriangle className="flex-shrink-0"/>{errors.maxWeeklyHours}</p>}
               </div>
             </div>
-
             <div className="flex gap-3 px-6 pb-5 justify-end">
               <button onClick={() => setModal(null)} className="px-4 py-2 text-xs font-bold rounded-lg border border-slate-200 text-muted hover:bg-slate-50 transition-colors">Cancel</button>
-              <span title={!formReady ? 'Please fill all required fields' : ''}>
-                <button
-                  id="btn-save"
-                  onClick={modal === 'add' ? handleCreate : handleUpdate}
-                  disabled={!formReady}
-                  className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-extrabold rounded-lg bg-primary text-white hover:bg-primary/90 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <FaSave className="text-[10px]" /> {modal === 'add' ? 'Add Workload' : 'Save Changes'}
-                </button>
-              </span>
+              <button
+                id="btn-save"
+                onClick={modal==='add' ? handleCreate : handleUpdate}
+                disabled={!formReady || saving}
+                className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-extrabold rounded-lg bg-primary text-white hover:bg-primary/90 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {saving ? <FaSpinner className="animate-spin-slow text-[10px]" /> : <FaSave className="text-[10px]" />}
+                {saving ? 'Saving…' : (modal==='add'?'Add Lecturer':'Save Changes')}
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ══ DELETE CONFIRM ══ */}
+      {/* ── Delete Confirm ── */}
       {delId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm p-6">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 rounded-xl bg-rose-100 flex items-center justify-center text-rose-500 text-xl"><FaTrash /></div>
               <div>
-                <h3 className="font-extrabold text-navy dark:text-white">Confirm Delete</h3>
+                <h3 className="font-extrabold">Confirm Delete</h3>
                 <p className="text-xs text-muted mt-0.5">This action cannot be undone.</p>
               </div>
             </div>
-            <p className="text-sm text-slate-600 dark:text-slate-300 mb-5">
-              Are you sure you want to delete workload record for <strong>{teachers.find(t=>t.id===delId)?.name}</strong>?
+            <p className="text-sm text-slate-600 mb-5">
+              Delete <strong>{lecturers.find(l => String(l._id) === String(delId) || String(l.lecturerId) === String(delId))?.name || 'this lecturer'}</strong> from the system?
             </p>
             <div className="flex gap-3 justify-end">
-              <button onClick={() => setDelId(null)} className="px-4 py-2 text-xs font-bold rounded-lg border border-slate-200 text-muted hover:bg-slate-50 transition-colors">Cancel</button>
-              <button id="btn-confirm-delete" onClick={handleDelete} className="px-5 py-2 text-xs font-extrabold rounded-lg bg-rose-500 text-white hover:bg-rose-600 transition-all shadow-sm">
-                Yes, Delete
+              <button onClick={() => setDelId(null)} className="px-4 py-2 text-xs font-bold rounded-lg border border-slate-200 text-muted hover:bg-slate-50">Cancel</button>
+              <button id="btn-confirm-delete" onClick={handleDelete} disabled={saving} className="px-5 py-2 text-xs font-extrabold rounded-lg bg-rose-500 text-white hover:bg-rose-600 transition-all shadow-sm disabled:opacity-40">
+                {saving ? 'Deleting…' : 'Yes, Delete'}
               </button>
             </div>
           </div>
@@ -708,8 +726,8 @@ export default function TeacherWorkload() {
         .reveal-on-scroll { opacity:0; transform:translateY(24px); transition:opacity .55s ease,transform .55s ease; }
         .reveal-on-scroll.is-visible { opacity:1; transform:translateY(0); }
         @keyframes tw-shrink { from{transform:scaleX(1)} to{transform:scaleX(0)} }
-        @keyframes tw-fade-in { from{opacity:0;transform:translateY(-3px)} to{opacity:1;transform:translateY(0)} }
-        .tw-fade-in { animation: tw-fade-in 0.2s ease forwards; }
+        @keyframes tw-spin { to{transform:rotate(360deg)} }
+        .animate-spin-slow { animation: tw-spin 1s linear infinite; }
       `}</style>
     </div>
   );
