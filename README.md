@@ -1,83 +1,124 @@
-# Time Table Management System
+# Classroom & Resource Management Module
 
-## Prerequisites
+Full MERN feature for managing university classrooms and labs with CRUD operations, filtering, resource tracking, and a React-based admin UI.
 
-- **Node.js** (v16 or later) — [Download](https://nodejs.org/)
-- **npm** (comes with Node.js)
+## Stack
 
-## Setup Instructions
+- Node.js + Express.js API
+- MongoDB + Mongoose
+- React + Vite frontend
 
-### 1. Clone the Repository
+## Project Structure
+
+- `backend/` -> Express API and MongoDB models
+- `frontend/` -> React classroom management UI
+- `docs/mongodb-database-design.md` -> MongoDB design for the wider timetable system
+
+## Setup
+
+1. Install backend dependencies:
+   ```bash
+   npm install
+   ```
+2. Install frontend dependencies:
+   ```bash
+   npm --prefix frontend install
+   ```
+3. Create `.env` from `.env.example` and set your MongoDB URI.
+4. Start backend and frontend together:
+   ```bash
+   npm run dev
+   ```
+
+Frontend runs on `http://localhost:5173` and proxies API requests to `http://localhost:5000`.
+
+## Environment Variables
+
+- `PORT` (default: `5000`)
+- `MONGODB_URI` (required)
+- `NODE_ENV` (optional, `development` or `production`)
+- `CORS_ALLOWED_ORIGINS` (optional, comma-separated list like `https://myapp.com,https://admin.myapp.com`)
+
+## API Endpoints
+
+Base URL: `/api/classrooms`
+
+- `POST /api/classrooms` -> Create classroom/lab
+- `GET /api/classrooms` -> List classrooms (supports filters)
+- `GET /api/classrooms/:id` -> Get one classroom by ID
+- `PUT /api/classrooms/:id` -> Update classroom
+- `DELETE /api/classrooms/:id` -> Delete classroom
+- `POST /api/classrooms/ai/chat` -> Classroom AI bot chat endpoint
+- `GET /api/health` -> Health check
+
+Auth:
+
+- `POST /api/auth/login` -> Login
+- `POST /api/auth/register` -> Register
+- `POST /api/auth/forgot-password` -> Generate reset token
+- `POST /api/auth/reset-password/:token` -> Set new password
+
+## Classroom Payload Example
+
+```json
+{
+  "roomName": "CSE-201",
+  "building": "Engineering Block",
+  "capacity": 60,
+  "type": "classroom",
+  "resources": ["projector", "whiteboard"],
+  "status": "available"
+}
+```
+
+## Supported Filters
+
+- `building=Engineering`
+- `type=classroom|lab`
+- `status=available|maintenance`
+- `minCapacity=30`
+- `maxCapacity=120`
+- `resource=projector`
+- `availableOnly=true`
+- `page=1`
+- `limit=20`
+
+Example:
+
+```http
+GET /api/classrooms?building=Engineering&type=lab&minCapacity=25&availableOnly=true
+```
+
+## Frontend Features
+
+- Classroom creation and update form
+- Filter bar for building, type, status, capacity, and resource
+- Availability-focused listing with status badges
+- Delete action with confirmation
+- Dashboard summary cards for total rooms, available rooms, and labs
+- Floating AI bot assistant for natural-language classroom questions
+
+## AI Bot Chat Request Example
+
+```json
+{
+   "message": "Which labs are available?"
+}
+```
+
+## Data Rules
+
+- `roomName + building` must be unique.
+- `type` is restricted to `classroom` or `lab`.
+- `status` is restricted to `available` or `maintenance`.
+- `resources` are normalized to lowercase and duplicates are removed.
+
+## Production Build
+
+Build the React client:
 
 ```bash
-git clone <your-repo-url>
-cd Time-Table-Management-System
+npm run build:client
 ```
 
-### 2. Install All Dependencies
-
-```bash
-# Install root dependencies (concurrently)
-npm install
-
-# Install backend dependencies
-cd backend
-npm install
-
-# Install frontend dependencies
-cd ../frontend
-npm install
-```
-
-### 3. Run Backend & Frontend Together
-
-Use the following command from the project root to start both backend and frontend concurrently:
-
-```bash
-npx concurrently "node backend/server.js" "npm run dev --prefix frontend"
-```
-
-This will start the backend server (on port 5001) and the frontend (on port 5173) simultaneously.
-
-### 3. Configure Environment Variables
-
-The `backend/.env` file is already configured with:
-
-```env
-NODE_ENV=development
-PORT=5001
-MONGO_URI=mongodb+srv://<username>:<password>@time-table.nsigft4.mongodb.net/?appName=Time-Table
-JWT_SECRET=your_jwt_secret_key_change_this_in_production
-JWT_EXPIRE=30d
-```
-
-Update `MONGO_URI` and `JWT_SECRET` as needed.
-
-### 4. Run the Application
-
-From the project root, start both backend and frontend together:
-
-```bash
-npm run dev
-```
-
-This uses `concurrently` to run both servers at once:
-
-- **Backend API** → http://localhost:5001
-- **Frontend** → http://localhost:5173
-
-### 5. Run Individually (Optional)
-
-**Backend only:**
-
-```bash
-cd backend
-npm run dev
-```
-
-**Frontend only:**
-
-```bash
-cd frontend
-npm run dev
-```
+In production mode, the Express server serves `client/dist` directly.

@@ -1,19 +1,33 @@
 {
-  "name": "mern-time-table-management",
+  "name": "university-timetable-classroom-service",
   "version": "1.0.0",
-  "description": "MERN Stack Time Table Management System",
+  "description": "Classroom and resource management module for University Timetable Management System",
+  "main": "backend/server.js",
   "scripts": {
-    "start": "node backend/server.js",
-    "server": "nodemon backend/server.js",
-    "client": "npm run dev --prefix frontend",
-    "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install"
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "nodemon backend/server.js",
+    "dev:client": "npm --prefix frontend run dev",
+    "build:client": "npm --prefix frontend run build",
+    "start": "node backend/server.js"
   },
-  "keywords": [],
+  "keywords": [
+    "mern",
+    "express",
+    "mongodb",
+    "classroom-management",
+    "timetable"
+  ],
   "author": "",
   "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "mongoose": "^8.8.1",
+    "morgan": "^1.10.0"
+  },
   "devDependencies": {
-    "concurrently": "^9.0.1",
+    "concurrently": "^9.2.1",
     "nodemon": "^3.1.7"
   }
 }
