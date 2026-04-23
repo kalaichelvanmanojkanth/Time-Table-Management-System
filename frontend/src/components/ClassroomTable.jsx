@@ -1,3 +1,9 @@
+const statusLabel = (status = '') => {
+  const normalized = String(status).trim().toLowerCase();
+  if (!normalized) return '';
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+};
+
 function ClassroomTable({ classrooms, deletingId, onDelete, onEdit, readOnly = false, maintenanceRooms = [] }) {
   return (
     <section className="panel table-panel">
@@ -29,7 +35,7 @@ function ClassroomTable({ classrooms, deletingId, onDelete, onEdit, readOnly = f
                     <strong>{room.roomName}</strong>
                     <p className="maintenance-meta">{room.building}</p>
                   </div>
-                  <span className="status-badge maintenance">maintenance</span>
+                  <span className="status-badge maintenance">Maintenance</span>
                 </article>
               ))}
             </div>
@@ -82,7 +88,7 @@ function ClassroomTable({ classrooms, deletingId, onDelete, onEdit, readOnly = f
                     </div>
                   </td>
                   <td>
-                    <span className={`status-badge ${classroom.status}`}>{classroom.status}</span>
+                    <span className={`status-badge ${classroom.status}`}>{statusLabel(classroom.status)}</span>
                   </td>
                   {!readOnly ? (
                     <td>

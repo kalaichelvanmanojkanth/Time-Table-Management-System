@@ -131,6 +131,7 @@ function ClassroomForm({ activeClassroom, onCancel, onSubmit, saving }) {
         Status
         <select name="status" defaultValue={formState.status}>
           <option value="available">Available</option>
+          <option value="ongoing">Ongoing</option>
           <option value="maintenance">Maintenance</option>
         </select>
       </label>

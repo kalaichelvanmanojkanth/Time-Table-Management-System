@@ -616,6 +616,11 @@ tbody tr:hover {
   color: var(--success);
 }
 
+.status-badge.ongoing {
+  background: rgba(217, 119, 6, 0.16);
+  color: #b45309;
+}
+
 .status-badge.maintenance {
   background: rgba(190, 18, 60, 0.14);
   color: var(--danger);

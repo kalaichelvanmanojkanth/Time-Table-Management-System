@@ -48,8 +48,8 @@ const classroomSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: {
-        values: ["available", "maintenance"],
-        message: "status must be either available or maintenance",
+        values: ["available", "ongoing", "maintenance"],
+        message: "status must be one of available, ongoing, or maintenance",
       },
       default: "available",
       lowercase: true,

@@ -31,6 +31,7 @@ function ClassroomFilters({ filters, onChange, onReset }) {
           <select name="status" onChange={onChange} value={filters.status}>
             <option value="">Any</option>
             <option value="available">Available</option>
+            <option value="ongoing">Ongoing</option>
             <option value="maintenance">Maintenance</option>
           </select>
         </label>

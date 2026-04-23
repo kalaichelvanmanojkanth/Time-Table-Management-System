@@ -37,7 +37,27 @@ function UserClassroomPage() {
         }),
       ]);
       const fetched = filteredPayload.data || [];
-      setClassrooms(fetched);
+
+      const mainTableRooms = fetched.filter((room) => {
+        const roomStatus = String(room?.status || "").trim().toLowerCase();
+        const selectedStatus = String(currentFilters.status || "").trim().toLowerCase();
+
+        if (currentFilters.availableOnly) {
+          return roomStatus === "available" || roomStatus === "ongoing";
+        }
+
+        if (selectedStatus === "maintenance") {
+          return false;
+        }
+
+        if (selectedStatus === "available" || selectedStatus === "ongoing") {
+          return roomStatus === selectedStatus;
+        }
+
+        return roomStatus === "available" || roomStatus === "ongoing";
+      });
+
+      setClassrooms(mainTableRooms);
       setMaintenanceRooms(maintenancePayload.data || []);
     } catch (loadError) {
       setError(loadError.message || "Failed to load classrooms");
