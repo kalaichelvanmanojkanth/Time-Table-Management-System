@@ -30,10 +30,6 @@ import Reports from './pages/analytics/Reports';
 import ResourceUtilization from './pages/analytics/ResourceUtilization';
 import SubjectDistribution from './pages/analytics/SubjectDistribution';
 import TeacherWorkload from './pages/analytics/TeacherWorkload';
-import AISchedulingSetup from './pages/AISchedulingSetup';
-import ConflictDetection from './pages/ConflictDetection';
-import OptimizationSuggestions from './pages/OptimizationSuggestions';
-
 import AISchedulingIndex from './pages/ai-scheduling/AISchedulingIndex';
 import AISchedulingSetup from './pages/ai-scheduling/AISchedulingSetup';
 import ConflictDetection from './pages/ai-scheduling/ConflictDetection';

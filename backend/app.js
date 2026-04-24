@@ -98,6 +98,23 @@ app.use('/api/rooms', require('./routes/roomRoutes'));
 app.use('/api/timeslots', require('./routes/timeslotRoutes'));
 app.use('/api/timetables', require('./routes/timetableRoutes'));
 
+// AI Scheduling Routes
+app.use('/api/schedule',    require('./routes/scheduleRoutes'));
+app.use('/api/ai',          require('./routes/aiRoutes'));
+app.use('/api/ai-setup',    require('./routes/aiSetupRoutes'));
+
+// Resource routes (Teachers, Subjects, Rooms — from HEAD)
+const { teacherRouter, subjectRouter, roomRouter, resourceRouter } = require('./routes/resourceRoutes');
+app.use('/api/teachers',  teacherRouter);
+app.use('/api/subjects',  subjectRouter);
+// Note: /api/rooms is already mapped to roomRoutes. We should avoid duplicate mounting if roomRoutes is sufficient, but we might break AI setup if we don't.
+// Let's comment my roomRouter to see if it works, or map it to something else if needed. Wait, my code expects /api/rooms for AI Setup Room CRUD!
+// But `main` already has `app.use('/api/rooms', require('./routes/roomRoutes'));`.
+// I will mount HEAD's rooms here but wait... I'll check `frontend` to see what it calls. `api/rooms` is what frontend calls for both!
+// Actually let's just mount resourceRouter and the specific routers.
+app.use('/api/ai-rooms', roomRouter); // avoiding namespace collision 
+app.use('/api/resource',  resourceRouter);
+
 if (process.env.NODE_ENV === 'production') {
   const clientDistPath = path.join(__dirname, '..', 'frontend', 'dist');
 
