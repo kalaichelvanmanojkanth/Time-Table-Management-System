@@ -84,8 +84,11 @@ const EditTimeTable = () => {
     fetchDependencies();
   }, [id, navigate]);
 
-  const handleResourceCreate = async (entityType, payload) => {
-    const response = await resourceApiMap[entityType].create(payload);
+  const handleResourceCreate = async (entityType, payload, options = {}) => {
+    const response =
+      options.mode === 'update' && options.id
+        ? await resourceApiMap[entityType].update(options.id, payload)
+        : await resourceApiMap[entityType].create(payload);
     const resourceKey = resourceKeyMap[entityType];
 
     setResources((previousState) => ({
@@ -96,7 +99,13 @@ const EditTimeTable = () => {
         entityType
       ),
     }));
-    toast.success(`${entityType} added successfully.`);
+    if (!options.silent) {
+      toast.success(
+        options.mode === 'update'
+          ? `${entityType} updated successfully.`
+          : `${entityType} added successfully.`
+      );
+    }
     return response.data;
   };
 
