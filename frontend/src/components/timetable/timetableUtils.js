@@ -129,13 +129,46 @@ export const getLecturerDisplayLabel = (lecturer) => {
 
 export const getApiErrorMessage = (error, fallbackMessage) => {
   const responseData = error?.response?.data;
+  const statusCode = error?.response?.status;
 
   if (Array.isArray(responseData?.errors) && responseData.errors.length > 0) {
-    return responseData.errors[0].msg || fallbackMessage;
+    const messages = responseData.errors
+      .map((item) => item?.msg || item?.message || item)
+      .filter(Boolean);
+
+    if (messages.length > 0) {
+      return messages.join(', ');
+    }
   }
 
   if (Array.isArray(responseData?.message) && responseData.message.length > 0) {
-    return responseData.message[0] || fallbackMessage;
+    const messages = responseData.message
+      .map((item) => item?.msg || item?.message || item)
+      .filter(Boolean);
+
+    if (messages.length > 0) {
+      return messages.join(', ');
+    }
+  }
+
+  if (typeof responseData?.message === 'string' && responseData.message.trim()) {
+    return responseData.message;
+  }
+
+  if (typeof responseData?.error === 'string' && responseData.error.trim()) {
+    return responseData.error;
+  }
+
+  if (statusCode === 401) {
+    return 'Your session has expired. Please sign in again.';
+  }
+
+  if (statusCode === 403) {
+    return 'You do not have permission to perform this action.';
+  }
+
+  if (!error?.response) {
+    return 'Unable to reach the server. Please check your connection and try again.';
   }
 
   return responseData?.message || error?.message || fallbackMessage;
@@ -490,6 +523,215 @@ export const buildClientConflicts = ({
   }
 
   return conflicts;
+};
+
+export const getSelectableTimeSlots = ({
+  entries = [],
+  formData,
+  resources,
+  currentEntryId,
+}) => {
+  const { lecturers = [], timeslots = [] } = resources || {};
+
+  if (!formData?.week) {
+    return timeslots;
+  }
+
+  const selectedLecturer = formData.lecturerId
+    ? lecturers.find((item) => item._id === formData.lecturerId)
+    : null;
+
+  const relevantEntries = entries.filter(
+    (entry) => entry.week === formData.week && entry._id !== currentEntryId
+  );
+
+  return sortTimeSlots(timeslots).filter((slot) => {
+    if (selectedLecturer && !availabilityCoversSlot(selectedLecturer, slot)) {
+      return false;
+    }
+
+    const isBlocked = relevantEntries.some((entry) => {
+      const entrySlot = getEntrySlot(entry);
+
+      if (!entrySlot || !slotsOverlap(entrySlot, slot)) {
+        return false;
+      }
+
+      const lecturerConflict =
+        formData.lecturerId &&
+        (entry.lecturerId?._id === formData.lecturerId ||
+          entry.lecturerId === formData.lecturerId);
+      const roomConflict =
+        formData.roomId &&
+        (entry.roomId?._id === formData.roomId || entry.roomId === formData.roomId);
+      const courseConflict =
+        formData.courseId &&
+        (entry.courseId?._id === formData.courseId ||
+          entry.courseId === formData.courseId);
+
+      return lecturerConflict || roomConflict || courseConflict;
+    });
+
+    return !isBlocked;
+  });
+};
+
+const getEntityId = (entity) => entity?._id || entity;
+
+export const getLecturerScheduleSuggestions = ({
+  entries = [],
+  formData,
+  resources,
+  currentEntryId,
+  maxSuggestions = 5,
+}) => {
+  const { courses = [], lecturers = [], rooms = [], timeslots = [] } = resources || {};
+
+  if (!formData?.lecturerId || !formData?.week) {
+    return [];
+  }
+
+  const lecturer = lecturers.find((item) => item._id === formData.lecturerId);
+
+  if (!lecturer) {
+    return [];
+  }
+
+  const weekEntries = entries.filter(
+    (entry) => entry.week === formData.week && entry._id !== currentEntryId
+  );
+
+  const courseCounts = weekEntries.reduce((accumulator, entry) => {
+    const courseId = getEntityId(entry.courseId);
+
+    if (!courseId) {
+      return accumulator;
+    }
+
+    accumulator[courseId] = (accumulator[courseId] || 0) + 1;
+    return accumulator;
+  }, {});
+
+  const roomCounts = weekEntries.reduce((accumulator, entry) => {
+    const roomId = getEntityId(entry.roomId);
+
+    if (!roomId) {
+      return accumulator;
+    }
+
+    accumulator[roomId] = (accumulator[roomId] || 0) + 1;
+    return accumulator;
+  }, {});
+
+  const matchingCourses = courses
+    .filter((course) => course.department === lecturer.department)
+    .map((course) => {
+      const scheduled = courseCounts[course._id] || 0;
+      const sessionsPerWeek = Number(course.sessionsPerWeek || 0);
+      const remaining = Math.max(sessionsPerWeek - scheduled, 0);
+
+      return {
+        course,
+        scheduled,
+        remaining,
+      };
+    })
+    .sort((left, right) => {
+      if (right.remaining !== left.remaining) {
+        return right.remaining - left.remaining;
+      }
+
+      return (left.course.code || '').localeCompare(right.course.code || '');
+    });
+
+  const availableSlots = sortTimeSlots(timeslots).filter((slot) => {
+    if (!availabilityCoversSlot(lecturer, slot)) {
+      return false;
+    }
+
+    const hasLecturerConflict = weekEntries.some((entry) => {
+      const slotToCompare = getEntrySlot(entry);
+      return (
+        getEntityId(entry.lecturerId) === lecturer._id &&
+        slotToCompare &&
+        slotsOverlap(slotToCompare, slot)
+      );
+    });
+
+    return !hasLecturerConflict;
+  });
+
+  const suggestions = [];
+
+  for (const slot of availableSlots) {
+    const freeRooms = rooms
+      .filter((room) => {
+        const isRoomBusy = weekEntries.some((entry) => {
+          const slotToCompare = getEntrySlot(entry);
+          return (
+            getEntityId(entry.roomId) === room._id &&
+            slotToCompare &&
+            slotsOverlap(slotToCompare, slot)
+          );
+        });
+
+        return !isRoomBusy;
+      })
+      .sort((left, right) => {
+        const leftCount = roomCounts[left._id] || 0;
+        const rightCount = roomCounts[right._id] || 0;
+
+        if (leftCount !== rightCount) {
+          return leftCount - rightCount;
+        }
+
+        return (left.name || '').localeCompare(right.name || '');
+      });
+
+    if (freeRooms.length === 0) {
+      continue;
+    }
+
+    for (const courseInfo of matchingCourses) {
+      const hasCourseConflict = weekEntries.some((entry) => {
+        const slotToCompare = getEntrySlot(entry);
+
+        return (
+          getEntityId(entry.courseId) === courseInfo.course._id &&
+          slotToCompare &&
+          slotsOverlap(slotToCompare, slot)
+        );
+      });
+
+      if (hasCourseConflict) {
+        continue;
+      }
+
+      const room = freeRooms[0];
+
+      suggestions.push({
+        lecturerId: lecturer._id,
+        courseId: courseInfo.course._id,
+        roomId: room._id,
+        timeslotId: slot._id,
+        course: courseInfo.course,
+        room,
+        slot,
+        reason:
+          courseInfo.remaining > 0
+            ? `${courseInfo.course.code} needs ${courseInfo.remaining} more session${
+                courseInfo.remaining > 1 ? 's' : ''
+              } this week.`
+            : `${courseInfo.course.code} matches ${lecturer.department} and fits this slot.`,
+      });
+
+      if (suggestions.length >= maxSuggestions) {
+        return suggestions;
+      }
+    }
+  }
+
+  return suggestions;
 };
 
 export const buildConflictEntryIds = (entries = []) => {

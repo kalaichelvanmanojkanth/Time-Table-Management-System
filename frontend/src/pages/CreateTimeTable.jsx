@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import { FaEye } from 'react-icons/fa';
 import Spinner from '../components/Spinner';
 import TimeTableLayout from '../components/timetable/TimeTableLayout';
 import TimeTableForm from '../components/timetable/TimeTableForm';
@@ -74,8 +76,11 @@ const CreateTimeTable = () => {
     fetchDependencies();
   }, []);
 
-  const handleResourceCreate = async (entityType, payload) => {
-    const response = await resourceApiMap[entityType].create(payload);
+  const handleResourceCreate = async (entityType, payload, options = {}) => {
+    const response =
+      options.mode === 'update' && options.id
+        ? await resourceApiMap[entityType].update(options.id, payload)
+        : await resourceApiMap[entityType].create(payload);
     const resourceKey = resourceKeyMap[entityType];
 
     setResources((previousState) => ({
@@ -86,11 +91,17 @@ const CreateTimeTable = () => {
         entityType
       ),
     }));
-    toast.success(`${entityType} added successfully.`);
+    if (!options.silent) {
+      toast.success(
+        options.mode === 'update'
+          ? `${entityType} updated successfully.`
+          : `${entityType} added successfully.`
+      );
+    }
     return response.data;
   };
 
-  const handleSubmit = async (formData) => {
+  const handleSubmit = async (formData, options = {}) => {
     const response = await timetableApi.timetables.create(formData);
     const createdEntry = response?.data;
 
@@ -98,10 +109,16 @@ const CreateTimeTable = () => {
       setEntries((previousEntries) => [createdEntry, ...previousEntries]);
     }
 
+    if (options.submitIntent === 'add-next') {
+      toast.success('Entry saved. Continue with your next session.');
+      return createdEntry;
+    }
     toast.success('Timetable entry created successfully.');
     navigate(`/timetable/view?week=${encodeURIComponent(formData.week)}`, {
       state: { createdEntry },
     });
+
+    return createdEntry;
   };
 
   const handleRefreshData = async () => {
@@ -177,6 +194,11 @@ const CreateTimeTable = () => {
     <TimeTableLayout
       title="Create Timetable Entry"
       description="Add a single session manually while the module checks for lecturer, room, and course clashes."
+      actions={
+        <Link to="/timetable/view" className="btn btn-outline">
+          <FaEye /> View Schedule
+        </Link>
+      }
     >
       <TimeTableForm
         resources={resources}

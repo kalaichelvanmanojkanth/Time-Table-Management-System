@@ -15,7 +15,16 @@ const handleResponse = async (response) => {
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    const detail = payload.errors?.join(", ") || payload.message || "Request failed";
+    const detail =
+      (Array.isArray(payload.errors)
+        ? payload.errors
+            .map((item) => item?.msg || item?.message || item)
+            .filter(Boolean)
+            .join(', ')
+        : '') ||
+      payload.message ||
+      payload.error ||
+      'Request failed';
     throw new Error(detail);
   }
 

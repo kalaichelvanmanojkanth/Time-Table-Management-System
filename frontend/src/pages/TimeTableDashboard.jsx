@@ -63,6 +63,7 @@ const TimeTableDashboard = () => {
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [generationConflicts, setGenerationConflicts] = useState([]);
   const [generating, setGenerating] = useState(false);
+  const [generatedAt, setGeneratedAt] = useState(null);
 
   const loadModuleData = async (selectedWeek = week) => {
     const [courses, lecturers, rooms, timeslots, timetableEntries] =
@@ -125,6 +126,7 @@ const TimeTableDashboard = () => {
     try {
       const response = await timetableApi.timetables.generate({ week });
       setEntries(response.data);
+      setGeneratedAt(new Date());
       setShowGenerateModal(false);
       toast.success('Timetable generated successfully.');
     } catch (error) {
@@ -152,6 +154,7 @@ const TimeTableDashboard = () => {
     ...course,
     scheduled: entries.filter((entry) => entry.courseId?._id === course._id).length,
   }));
+  const generatedPreviewEntries = [...entries].slice(0, 8);
 
   return (
     <TimeTableLayout
@@ -222,6 +225,32 @@ const TimeTableDashboard = () => {
             ))}
           </div>
         </div>
+
+        {generatedAt ? (
+          <div className="timetable-panel timetable-panel--half timetable-generated-panel">
+            <h3>Generated Schedule Snapshot</h3>
+            <p className="timetable-helper-text" style={{ marginBottom: '0.8rem' }}>
+              Visible after generation for {formatWeekLabel(week)}.
+            </p>
+            {generatedPreviewEntries.length === 0 ? (
+              <div className="timetable-empty-state">
+                <p>No generated sessions to preview.</p>
+              </div>
+            ) : (
+              <div className="timetable-session-list">
+                {generatedPreviewEntries.map((entry) => (
+                  <div key={entry._id} className="timetable-session-item timetable-session-item--generated">
+                    <strong>{entry.courseId?.code}</strong>
+                    <p>{entry.courseId?.name}</p>
+                    <small>
+                      {entry.timeslotId?.day} • {formatTimeRange(entry.timeslotId)} • {entry.roomId?.name}
+                    </small>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null}
 
         <div className="timetable-panel timetable-panel--half">
           <h3>Week Overview</h3>

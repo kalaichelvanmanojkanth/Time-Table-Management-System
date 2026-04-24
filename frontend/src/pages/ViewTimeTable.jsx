@@ -209,7 +209,7 @@ const ViewTimeTable = () => {
     >
       <div className="timetable-grid-layout">
         <div className="timetable-panel">
-          <div className="timetable-inline-actions">
+          <div className="timetable-view-filters">
             <div className="form-group" style={{ minWidth: '220px' }}>
               <label htmlFor="viewWeek">Week</label>
               <input
@@ -237,6 +237,9 @@ const ViewTimeTable = () => {
             </div>
 
             <span className="timetable-chip">{formatWeekLabel(week)}</span>
+            <span className="timetable-chip timetable-chip--soft">
+              {entries.length} Sessions
+            </span>
             {canManageTimetable ? (
               <button
                 type="button"
@@ -247,6 +250,25 @@ const ViewTimeTable = () => {
                 <FaTrash /> {selectedCourseId ? 'Clear Filtered' : 'Clear Week'}
               </button>
             ) : null}
+          </div>
+
+          <div className="timetable-summary-grid" style={{ marginTop: '1rem' }}>
+            <div className="timetable-summary-card">
+              <strong>Active Week</strong>
+              <p>{formatWeekLabel(week)}</p>
+            </div>
+            <div className="timetable-summary-card">
+              <strong>Course Filter</strong>
+              <p>
+                {selectedCourseId
+                  ? courses.find((course) => course._id === selectedCourseId)?.code || 'Selected course'
+                  : 'All courses'}
+              </p>
+            </div>
+            <div className="timetable-summary-card">
+              <strong>Grid Status</strong>
+              <p>{entries.length > 0 ? 'Schedule ready to review' : 'No sessions for current filters'}</p>
+            </div>
           </div>
         </div>
 

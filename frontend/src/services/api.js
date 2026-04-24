@@ -25,6 +25,44 @@ const api = axios.create({
   responseType: 'json',
 });
 
+const getNormalizedErrorMessage = (error) => {
+  const responseData = error?.response?.data;
+
+  if (Array.isArray(responseData?.errors) && responseData.errors.length > 0) {
+    const formattedErrors = responseData.errors
+      .map((item) => item?.msg || item?.message || item)
+      .filter(Boolean);
+
+    if (formattedErrors.length > 0) {
+      return formattedErrors.join(', ');
+    }
+  }
+
+  if (Array.isArray(responseData?.message) && responseData.message.length > 0) {
+    const formattedMessages = responseData.message
+      .map((item) => item?.msg || item?.message || item)
+      .filter(Boolean);
+
+    if (formattedMessages.length > 0) {
+      return formattedMessages.join(', ');
+    }
+  }
+
+  if (typeof responseData?.message === 'string' && responseData.message.trim()) {
+    return responseData.message;
+  }
+
+  if (typeof responseData?.error === 'string' && responseData.error.trim()) {
+    return responseData.error;
+  }
+
+  if (!error?.response) {
+    return 'Unable to reach server. Please check your connection and try again.';
+  }
+
+  return error?.message || 'Request failed. Please try again.';
+};
+
 /* ── Request interceptor: attach auth token ── */
 api.interceptors.request.use(
   (config) => {
@@ -52,9 +90,12 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
+    error.message = getNormalizedErrorMessage(error);
     const status   = error.response?.status;
-    const message  = error.response?.data?.message;
+    const message  = getNormalizedErrorMessage(error);
     const isSilent = error.config?._silent === true; // caller opted out of global toast
+
+    error.message = message;
 
     if (status === 401) {
       localStorage.removeItem('user');
