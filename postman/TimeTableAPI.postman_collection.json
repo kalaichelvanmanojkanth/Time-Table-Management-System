@@ -1,0 +1,139 @@
+{
+  "info": {
+    "name": "Time-Table API",
+    "_postman_id": "time-table-api-collection",
+    "description": "Postman collection for the Time-Table-Management-System backend API.\nSet {{baseUrl}} to your backend URL (default: http://localhost:5001/api) and optionally set {{token}} for Authorization.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5001/api", "type": "string" },
+    { "key": "token", "value": "", "type": "string" },
+    { "key": "teacherId", "value": "", "type": "string" },
+    { "key": "roomId", "value": "", "type": "string" },
+    { "key": "subjectId", "value": "", "type": "string" },
+    { "key": "timetableId", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        }
+      }
+    },
+    {
+      "name": "Teachers - List",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+        "url": { "raw": "{{baseUrl}}/teachers", "host": ["{{baseUrl}}"], "path": ["teachers"] }
+      }
+    },
+    {
+      "name": "Teachers - Create",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json", "type": "text" },
+          { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"New Teacher\",\n  \"department\": \"Computer Science\",\n  \"maxWeeklyHours\": 20\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/teachers", "host": ["{{baseUrl}}"], "path": ["teachers"] }
+      }
+    },
+    {
+      "name": "Teachers - Update (use {{teacherId}})",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Content-Type", "value": "application/json", "type": "text" },
+          { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Updated Name\"\n}" },
+        "url": { "raw": "{{baseUrl}}/teachers/{{teacherId}}", "host": ["{{baseUrl}}"], "path": ["teachers", "{{teacherId}}"], "variable": [{ "key": "teacherId", "value": "" }] }
+      }
+    },
+    {
+      "name": "Teachers - Delete (use {{teacherId}})",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+        "url": { "raw": "{{baseUrl}}/teachers/{{teacherId}}", "host": ["{{baseUrl}}"], "path": ["teachers", "{{teacherId}}"] }
+      }
+    },
+
+    {
+      "name": "Rooms - List",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }], "url": { "raw": "{{baseUrl}}/rooms", "host": ["{{baseUrl}}"], "path": ["rooms"] } }
+    },
+    {
+      "name": "Rooms - Create",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json", "type": "text" }, { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" } ],
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"A123\",\n  \"type\": \"Lecture Hall\",\n  \"capacity\": 50\n}" },
+        "url": { "raw": "{{baseUrl}}/rooms", "host": ["{{baseUrl}}"], "path": ["rooms"] }
+      }
+    },
+    {
+      "name": "Rooms - Update (use {{roomId}})",
+      "request": { "method": "PUT", "header": [ { "key": "Content-Type", "value": "application/json", "type": "text" }, { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" } ], "body": { "mode": "raw", "raw": "{\n  \"capacity\": 60\n}" }, "url": { "raw": "{{baseUrl}}/rooms/{{roomId}}", "host": ["{{baseUrl}}"], "path": ["rooms", "{{roomId}}"] } }
+    },
+    {
+      "name": "Rooms - Delete (use {{roomId}})",
+      "request": { "method": "DELETE", "header": [ { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" } ], "url": { "raw": "{{baseUrl}}/rooms/{{roomId}}", "host": ["{{baseUrl}}"], "path": ["rooms", "{{roomId}}"] } }
+    },
+
+    {
+      "name": "Subjects - List",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }], "url": { "raw": "{{baseUrl}}/subjects", "host": ["{{baseUrl}}"], "path": ["subjects"] } }
+    },
+    {
+      "name": "Subjects - Create",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json", "type": "text" }, { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" } ],
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Calculus I\",\n  \"department\": \"Mathematics\",\n  \"weeklyHours\": 3\n}" },
+        "url": { "raw": "{{baseUrl}}/subjects", "host": ["{{baseUrl}}"], "path": ["subjects"] }
+      }
+    },
+    {
+      "name": "Subjects - Update (use {{subjectId}})",
+      "request": { "method": "PUT", "header": [ { "key": "Content-Type", "value": "application/json", "type": "text" }, { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" } ], "body": { "mode": "raw", "raw": "{\n  \"weeklyHours\": 4\n}" }, "url": { "raw": "{{baseUrl}}/subjects/{{subjectId}}", "host": ["{{baseUrl}}"], "path": ["subjects", "{{subjectId}}"] } }
+    },
+    {
+      "name": "Subjects - Delete (use {{subjectId}})",
+      "request": { "method": "DELETE", "header": [ { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" } ], "url": { "raw": "{{baseUrl}}/subjects/{{subjectId}}", "host": ["{{baseUrl}}"], "path": ["subjects", "{{subjectId}}"] } }
+    },
+
+    {
+      "name": "Timetables - List",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }], "url": { "raw": "{{baseUrl}}/timetables", "host": ["{{baseUrl}}"], "path": ["timetables"] } }
+    },
+    {
+      "name": "Timetables - Create",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json", "type": "text" }, { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" } ],
+        "body": { "mode": "raw", "raw": "{\n  \"subjectId\": \"{{subjectId}}\",\n  \"teacherId\": \"{{teacherId}}\",\n  \"roomId\": \"{{roomId}}\",\n  \"day\": \"Mon\",\n  \"startTime\": \"09:00\",\n  \"endTime\": \"10:00\"\n}" },
+        "url": { "raw": "{{baseUrl}}/timetables", "host": ["{{baseUrl}}"], "path": ["timetables"] }
+      }
+    },
+    {
+      "name": "Timetables - Update (use {{timetableId}})",
+      "request": { "method": "PUT", "header": [ { "key": "Content-Type", "value": "application/json", "type": "text" }, { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" } ], "body": { "mode": "raw", "raw": "{\n  \"startTime\": \"10:00\",\n  \"endTime\": \"11:00\"\n}" }, "url": { "raw": "{{baseUrl}}/timetables/{{timetableId}}", "host": ["{{baseUrl}}"], "path": ["timetables", "{{timetableId}}"] } }
+    },
+    {
+      "name": "Timetables - Delete (use {{timetableId}})",
+      "request": { "method": "DELETE", "header": [ { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" } ], "url": { "raw": "{{baseUrl}}/timetables/{{timetableId}}", "host": ["{{baseUrl}}"], "path": ["timetables", "{{timetableId}}"] } }
+    }
+  ]
+}

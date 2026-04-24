@@ -1,5 +1,7 @@
 // Global error handler middleware
 const errorHandler = (err, req, res, next) => {
+  // Always enforce UTF-8 encoding on error responses
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
   let error = { ...err };
   error.message = err.message;
 
@@ -19,7 +21,11 @@ const errorHandler = (err, req, res, next) => {
 
   // Mongoose duplicate key
   if (err.code === 11000) {
-    const message = 'Duplicate field value entered';
+    const duplicateField = Object.keys(err.keyPattern || {})[0];
+    const message =
+      duplicateField === 'email'
+        ? 'An account with this email already exists'
+        : 'Duplicate field value entered';
     return res.status(400).json({
       success: false,
       message,

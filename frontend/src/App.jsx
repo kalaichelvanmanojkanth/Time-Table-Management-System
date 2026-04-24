@@ -1,23 +1,38 @@
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import {
+  Navigate,
+  NavLink,
+  Route,
+  Routes,
+  useLocation,
+} from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-
-import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Navbar';
+import Footer from './components/Footer';
 import ProtectedRoute from './components/ProtectedRoute';
-
+import ClassroomManagementPage from './pages/ClassroomManagementPage';
+import CreateProduct from './pages/CreateProduct';
+import CreateTimeTable from './pages/CreateTimeTable';
+import Dashboard from './pages/Dashboard';
+import EditProduct from './pages/EditProduct';
+import EditTimeTable from './pages/EditTimeTable';
 import Home from './pages/Home';
 import Login from './pages/Login';
-import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
+import ForgotPassword from './pages/ForgotPassword';
 import ProductList from './pages/ProductList';
-import CreateProduct from './pages/CreateProduct';
-import EditProduct from './pages/EditProduct';
+import Register from './pages/Register';
+import TimeTableDashboard from './pages/TimeTableDashboard';
+import UserClassroomPage from './pages/UserClassroomPage';
+import ViewTimeTable from './pages/ViewTimeTable';
 import Analytics from './pages/analytics/Analytics';
-import TeacherWorkload from './pages/analytics/TeacherWorkload';
-import SubjectDistribution from './pages/analytics/SubjectDistribution';
-import ResourceUtilization from './pages/analytics/ResourceUtilization';
+import AnalyticsDashboard from './pages/analytics/AnalyticsDashboard';
 import Reports from './pages/analytics/Reports';
+import ResourceUtilization from './pages/analytics/ResourceUtilization';
+import SubjectDistribution from './pages/analytics/SubjectDistribution';
+import TeacherWorkload from './pages/analytics/TeacherWorkload';
+import AISchedulingSetup from './pages/AISchedulingSetup';
+import ConflictDetection from './pages/ConflictDetection';
+import OptimizationSuggestions from './pages/OptimizationSuggestions';
 
 import AISchedulingIndex from './pages/ai-scheduling/AISchedulingIndex';
 import AISchedulingSetup from './pages/ai-scheduling/AISchedulingSetup';
@@ -25,51 +40,75 @@ import ConflictDetection from './pages/ai-scheduling/ConflictDetection';
 import OptimizationSuggestions from './pages/ai-scheduling/OptimizationSuggestions';
 import TimetableAnalytics from './pages/ai-scheduling/TimetableAnalytics';
 
-/* Hide the legacy Navbar on the homepage — Home.jsx has its own premium navbar */
-function AppShell() {
-  const { pathname } = useLocation();
-  const showNavbar = pathname !== '/' && !pathname.startsWith('/analytics') && !pathname.startsWith('/ai-scheduling');
+function App() {
+  const location = useLocation();
+  const { pathname } = location;
+
+  const isAuthPage =
+    pathname === '/login' ||
+    pathname === '/register' ||
+    pathname === '/forgot-password';
+  const isHomePage = pathname === '/';
+  const isTimeTablePage = pathname.startsWith('/timetable');
+  const isRolePage = pathname === '/user' || pathname === '/admin';
+  const isAnalyticsPage = pathname.startsWith('/analytics');
+  const isAIPage = pathname.startsWith('/ai');
+
+  const showGlobalChrome =
+    !isAuthPage &&
+    !isHomePage &&
+    !isTimeTablePage &&
+    !isRolePage &&
+    !isAnalyticsPage &&
+    !isAIPage;
 
   return (
-    <div className="app">
-      {showNavbar && <Navbar />}
-      <main className={showNavbar ? 'main-content' : ''}>
+    <div className={isRolePage ? 'role-layout' : 'app'}>
+      {showGlobalChrome ? <Navbar /> : null}
+
+      {isRolePage ? (
+        <header className="role-header">
+          <div>
+            <h1>UNIVERSITY TIMETABLE SYSTEM</h1>
+          </div>
+          <nav className="role-nav">
+            <NavLink
+              className={({ isActive }) => `role-link${isActive ? ' active' : ''}`}
+              to="/user"
+            >
+              User page
+            </NavLink>
+            <NavLink
+              className={({ isActive }) => `role-link${isActive ? ' active' : ''}`}
+              to="/admin"
+            >
+              Admin page
+            </NavLink>
+          </nav>
+        </header>
+      ) : null}
+
+      <main className={isRolePage ? undefined : 'main-content'}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/register" element={<Register />} />
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <div className="container">
-                  <Dashboard />
-                </div>
-              </ProtectedRoute>
-            }
-          />
-          <Route path="/products" element={<div className="container"><ProductList /></div>} />
-          <Route
-            path="/products/new"
-            element={
-              <ProtectedRoute>
-                <div className="container">
-                  <CreateProduct />
-                </div>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/products/:id/edit"
-            element={
-              <ProtectedRoute>
-                <div className="container">
-                  <EditProduct />
-                </div>
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/products" element={<ProductList />} />
+          
+          <Route path="/products/create" element={<ProtectedRoute><CreateProduct /></ProtectedRoute>} />
+          <Route path="/products/edit/:id" element={<ProtectedRoute><EditProduct /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/timetable" element={<ProtectedRoute><TimeTableDashboard /></ProtectedRoute>} />
+          <Route path="/timetable/create" element={<ProtectedRoute><CreateTimeTable /></ProtectedRoute>} />
+          <Route path="/timetable/view" element={<ViewTimeTable />} />
+          <Route path="/timetable/edit/:id" element={<ProtectedRoute><EditTimeTable /></ProtectedRoute>} />
+          <Route path="/user" element={<UserClassroomPage />} />
+          <Route path="/admin" element={<ProtectedRoute><ClassroomManagementPage /></ProtectedRoute>} />
+          
+          {/* Analytics Routes */}
           <Route path="/analytics" element={<Analytics />} />
+          <Route path="/analytics/dashboard" element={<AnalyticsDashboard />} />
           <Route path="/analytics/teacher-workload" element={<TeacherWorkload />} />
           <Route path="/analytics/subject-distribution" element={<SubjectDistribution />} />
           <Route path="/analytics/resource-utilization" element={<ResourceUtilization />} />
@@ -81,20 +120,14 @@ function AppShell() {
           <Route path="/ai-scheduling/conflicts" element={<ConflictDetection />} />
           <Route path="/ai-scheduling/optimization" element={<OptimizationSuggestions />} />
           <Route path="/ai-scheduling/analytics" element={<TimetableAnalytics />} />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
-      <ToastContainer position="bottom-right" autoClose={3000} />
-    </div>
-  );
-}
 
-function App() {
-  return (
-    <Router>
-      <AuthProvider>
-        <AppShell />
-      </AuthProvider>
-    </Router>
+      {showGlobalChrome ? <Footer /> : null}
+      <ToastContainer position="top-right" autoClose={4000} />
+    </div>
   );
 }
 

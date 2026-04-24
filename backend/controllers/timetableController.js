@@ -1,24 +1,13 @@
 /* ════════════════════════════════════════════════════════════════
    timetableController.js  —  production-ready
-   ────────────────────────────────────────────────────────────────
-   Routes handled:
-     GET    /api/timetables               → fetch all (filterable)
-     POST   /api/timetables               → create one entry
-     PUT    /api/timetables/:id           → update one entry
-     DELETE /api/timetables/:id           → delete one entry
-     GET    /api/timetables/conflicts     → conflict detection
-     POST   /api/timetables/optimize      → greedy AI optimizer
-     POST   /api/timetables/apply-fixes   → persist optimized data
-     POST   /api/timetables/seed          → seed from AISetup (clears first)
-     PUT    /api/timetables/approve       → set all → "approved"
-     PUT    /api/timetables/publish       → set all → "published" (requires approved)
-════════════════════════════════════════════════════════════════ */
+   ════════════════════════════════════════════════════════════════ */
 
 const Timetable = require('../models/Timetable');
 const AISetup   = require('../models/AISetup');
 const Teacher   = require('../models/Teacher');
 const Subject   = require('../models/Subject');
 const Room      = require('../models/Room');
+const { getUnifiedAnalyticsData } = require('../utils/analyticsNormalizer');
 
 /* ──────────────────────────────────────────────────────────
    SHARED HELPERS
@@ -68,7 +57,6 @@ function detectConflicts(entries) {
     conflicts.push(obj);
   }
 
-  /* Teacher double-booking & room double-booking */
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       const a = entries[i];
@@ -95,7 +83,6 @@ function detectConflicts(entries) {
     }
   }
 
-  /* Teacher overload: > 3 sessions/day */
   const tdMap = {};
   for (const e of entries) {
     const k = `${e.teacher}__${e.day}`;
@@ -113,7 +100,6 @@ function detectConflicts(entries) {
     }
   }
 
-  /* Subject over-scheduled: > 4 sessions/week */
   const swMap = {};
   for (const e of entries) swMap[e.subject] = (swMap[e.subject] || 0) + 1;
   for (const [subject, cnt] of Object.entries(swMap)) {
@@ -130,12 +116,8 @@ function detectConflicts(entries) {
   return conflicts;
 }
 
-/* ──────────────────────────────────────────────────────────
-   AI SUGGESTION ENGINE
-────────────────────────────────────────────────────────── */
 function generateSuggestions(entries, conflicts) {
   const suggestions = [];
-
   for (const c of conflicts) {
     if (c.type === 'teacher')
       suggestions.push({
@@ -174,7 +156,6 @@ function generateSuggestions(entries, conflicts) {
       });
   }
 
-  /* Always-on best practices */
   const days = [...new Set(entries.map(e => e.day))];
   if (days.length < 4)
     suggestions.push({
@@ -196,9 +177,6 @@ function generateSuggestions(entries, conflicts) {
   return suggestions;
 }
 
-/* ──────────────────────────────────────────────────────────
-   GREEDY AUTO-OPTIMIZER
-────────────────────────────────────────────────────────── */
 function autoOptimize(entries) {
   const optimized = entries.map(e => ({ ...e }));
   const teacherSlots = new Set(optimized.map(e => `${e.teacher}__${e.day}__${e.startTime}`));
@@ -243,38 +221,25 @@ function autoOptimize(entries) {
   return { optimized, resolvedCount };
 }
 
-/* ══════════════════════════════════════════════════════════
-   CONTROLLERS
-══════════════════════════════════════════════════════════ */
-
 /* ──────────────────────────────────────────────────────────
    LIVE NAME RESOLVER
-   Resolves raw ObjectId strings in subject/teacher/room fields
-   to human-readable names using the respective collections.
-   Works for both old data (has ObjectIds) and new data (has names).
 ────────────────────────────────────────────────────────── */
 const IS_OBJECTID = /^[a-f\d]{24}$/i;
 
 async function resolveEntryNames(entries) {
   if (!entries.length) return entries;
-
-  // Collect all ObjectId-looking values per field
   const subjectIds = [...new Set(entries.map(e => e.subject).filter(v => IS_OBJECTID.test(String(v || ''))))];
   const teacherIds = [...new Set(entries.map(e => e.teacher).filter(v => IS_OBJECTID.test(String(v || ''))))];
   const roomIds    = [...new Set(entries.map(e => e.room   ).filter(v => IS_OBJECTID.test(String(v || ''))))];
-
-  // Also check the *Id backup fields for room (most common case)
   const roomIdFields = [...new Set(entries.map(e => e.roomId).filter(v => v && IS_OBJECTID.test(String(v))))]
   const allRoomIds   = [...new Set([...roomIds, ...roomIdFields])];
 
-  // Batch-lookup all at once
   const [subjectDocs, teacherDocs, roomDocs] = await Promise.all([
     subjectIds.length ? Subject.find({ _id: { $in: subjectIds } }).select('name').lean() : [],
     teacherIds.length ? Teacher.find({ _id: { $in: teacherIds } }).select('name').lean() : [],
     allRoomIds.length ? Room.find({    _id: { $in: allRoomIds  } }).select('name').lean() : [],
   ]);
 
-  // Build lookup maps
   const sMap = {}, tMap = {}, rMap = {};
   for (const d of subjectDocs) sMap[String(d._id)] = d.name;
   for (const d of teacherDocs) tMap[String(d._id)] = d.name;
@@ -288,84 +253,67 @@ async function resolveEntryNames(entries) {
 
   return entries.map(e => ({
     ...e,
-    subject: resolve(e.subject, sMap),
-    teacher: resolve(e.teacher, tMap),
-    room:    resolve(e.room, rMap) || resolve(e.roomId, rMap) || e.room,
+    subject: resolve(e.subject, sMap) || e.subjectId?.name,
+    teacher: resolve(e.teacher, tMap) || e.teacherId?.name,
+    room:    resolve(e.room, rMap) || resolve(e.roomId, rMap) || e.roomId?.name || e.room,
   }));
 }
 
-/* ── GET /api/timetables ── */
+/* ══════════════════════════════════════════════════════════
+   CONTROLLERS
+══════════════════════════════════════════════════════════ */
+
 const getTimetables = async (req, res) => {
   try {
-    const filter = {};
-    if (req.query.day)     filter.day     = req.query.day;
-    if (req.query.teacher) filter.teacher = new RegExp(req.query.teacher, 'i');
-    if (req.query.subject) filter.subject = new RegExp(req.query.subject, 'i');
-    if (req.query.room)    filter.room    = new RegExp(req.query.room,    'i');
-    if (req.query.status)  filter.status  = req.query.status;
+    const unified = await getUnifiedAnalyticsData({
+      TeacherModel: Teacher,
+      SubjectModel: Subject,
+      RoomModel: Room,
+      TimetableModel: Timetable,
+    });
 
-    const raw = await Timetable.find(filter)
-      .sort({ day: 1, startTime: 1 })
-      .lean();
+    let mappedEntries = unified.timetableEntries || [];
+    mappedEntries = await resolveEntryNames(mappedEntries);
+    
+    // Add grid and meta for AI Frontends
+    const grid = buildGrid(mappedEntries);
 
-    // Resolve any ObjectId strings → readable names on the fly
-    const entries = await resolveEntryNames(raw);
-
-    // Debug: show first entry so you can verify names in server logs
-    if (entries.length > 0) {
-      const s = entries[0];
-      console.log(`[getTimetables] Returning ${entries.length} entries. Sample →`, {
-        subject: s.subject, teacher: s.teacher, room: s.room,
-      });
-    } else {
-      console.log('[getTimetables] 0 entries found');
-    }
-
-    const grid = buildGrid(entries);
-
-    res.json({
+    res.status(200).json({
       success: true,
-      count:   entries.length,
-      data:    entries,
+      data: mappedEntries,
+      count: mappedEntries.length,
       grid,
       meta: {
-        days:      [...new Set(entries.map(e => e.day))],
-        teachers:  [...new Set(entries.map(e => e.teacher))],
-        subjects:  [...new Set(entries.map(e => e.subject))],
-        rooms:     [...new Set(entries.map(e => e.room))],
-        statuses:  [...new Set(entries.map(e => e.status))],
+        days:      [...new Set(mappedEntries.map(e => e.day))],
+        teachers:  [...new Set(mappedEntries.map(e => e.teacher))],
+        subjects:  [...new Set(mappedEntries.map(e => e.subject))],
+        rooms:     [...new Set(mappedEntries.map(e => e.room))],
+        statuses:  [...new Set(mappedEntries.map(e => e.status))],
         fetchedAt: new Date().toISOString(),
-      },
+        ...unified.meta
+      }
     });
   } catch (err) {
-    console.error('[Timetable] getTimetables error:', err.message);
-    res.status(500).json({ success: false, message: 'Failed to fetch timetables: ' + err.message });
+    console.error('[timetableController] getTimetables error:', err.message);
+    res.status(500).json({ success: false, message: 'Failed to fetch timetables', error: err.message });
   }
 };
 
-
-/* ── GET /api/timetables/conflicts ── */
 const getConflicts = async (req, res) => {
   try {
     const raw = await Timetable.find().sort({ createdAt: -1 }).lean();
-    // Resolve ObjectIds → names so conflict messages show readable text
     const entries = await resolveEntryNames(raw);
-    console.log(`[getConflicts] Scanning ${entries.length} entries for conflicts`);
-
     if (!entries.length) {
       return res.json({
         success: true, conflicts: [], suggestions: [],
-        meta: { totalEntries: 0, totalConflicts: 0, message: 'No timetable entries found — seed the database first' },
+        meta: { totalEntries: 0, totalConflicts: 0, message: 'No timetable entries found' },
       });
     }
-
     const conflicts   = detectConflicts(entries);
     const suggestions = generateSuggestions(entries, conflicts);
 
     res.json({
-      success: true,
-      conflicts,
-      suggestions,
+      success: true, conflicts, suggestions,
       meta: {
         totalEntries:     entries.length,
         totalConflicts:   conflicts.length,
@@ -376,18 +324,14 @@ const getConflicts = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('[Timetable] getConflicts error:', err.message);
     res.status(500).json({ success: false, message: 'Conflict detection failed: ' + err.message });
   }
 };
 
-/* ── POST /api/timetables/optimize ── */
 const optimizeTimetable = async (req, res) => {
   try {
     const entries = await Timetable.find().lean();
-    if (!entries.length)
-      return res.status(400).json({ success: false, message: 'No timetable entries to optimize — seed first' });
-
+    if (!entries.length) return res.status(400).json({ success: false, message: 'No entries' });
     const conflictsBefore         = detectConflicts(entries);
     const { optimized, resolvedCount } = autoOptimize(entries);
     const conflictsAfter          = detectConflicts(optimized);
@@ -405,72 +349,42 @@ const optimizeTimetable = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('[Timetable] optimizeTimetable error:', err.message);
-    res.status(500).json({ success: false, message: 'Optimization failed: ' + err.message });
+    res.status(500).json({ success: false, message: 'Optimization failed' });
   }
 };
 
-/* ── POST /api/timetables/apply-fixes ── */
 const applyFixes = async (req, res) => {
   try {
     const { entries } = req.body;
-    if (!Array.isArray(entries) || !entries.length)
-      return res.status(400).json({ success: false, message: 'No entries provided' });
-
+    if (!Array.isArray(entries) || !entries.length) return res.status(400).json({ success: false, message: 'No entries provided' });
     const modified  = entries.filter(e => e._modified);
-    if (!modified.length)
-      return res.json({ success: true, message: 'No changes to apply', updatedCount: 0 });
+    if (!modified.length) return res.json({ success: true, message: 'No changes', updatedCount: 0 });
 
-    const updates   = await Promise.all(
-      modified.map(e =>
-        Timetable.findByIdAndUpdate(
-          e._id,
-          { day: e.day, startTime: e.startTime, endTime: e.endTime, status: 'optimized' },
-          { new: true }
-        )
-      )
+    const updates = await Promise.all(
+      modified.map(e => Timetable.findByIdAndUpdate(e._id, { day: e.day, startTime: e.startTime, endTime: e.endTime, status: 'optimized' }, { new: true }))
     );
-
     const ok = updates.filter(Boolean);
-    res.json({ success: true, message: `${ok.length} entries updated`, updatedCount: ok.length, appliedAt: new Date().toISOString() });
+    res.json({ success: true, message: `${ok.length} entries updated`, updatedCount: ok.length });
   } catch (err) {
-    console.error('[Timetable] applyFixes error:', err.message);
-    res.status(500).json({ success: false, message: 'Failed to apply fixes: ' + err.message });
+    res.status(500).json({ success: false, message: 'Apply failed' });
   }
 };
 
-/* ── POST /api/timetables/seed ── Clear + re-generate from latest AISetup */
 const seedFromSetup = async (req, res) => {
   try {
-    /* 1. Get latest AI Setup */
     const setup = await AISetup.findOne().sort({ createdAt: -1 }).lean();
-    if (!setup)
-      return res.status(404).json({ success: false, message: 'No AI Setup found — save your setup first' });
-
+    if (!setup) return res.status(404).json({ success: false, message: 'No AI Setup' });
     const { teachers = [], subjects = [], rooms = [], workingDays = [], timeSlots = 6 } = setup;
+    if (!teachers.length || !subjects.length || !rooms.length || !workingDays.length) return res.status(400).json({ success: false, message: 'Setup incomplete' });
 
-    /* 2. Validate */
-    if (!teachers.length)    return res.status(400).json({ success: false, message: 'Setup has no teachers' });
-    if (!subjects.length)    return res.status(400).json({ success: false, message: 'Setup has no subjects' });
-    if (!rooms.length)       return res.status(400).json({ success: false, message: 'Setup has no rooms' });
-    if (!workingDays.length) return res.status(400).json({ success: false, message: 'Setup has no working days' });
-
-    /* 3. Resolve ObjectId strings → human-readable names
-       AISetup stores _id strings of Teacher/Subject/Room documents.
-       Fetch the actual names; fall back to the raw string if lookup fails.
-    */
     const isObjectId = (v) => /^[a-f\d]{24}$/i.test(String(v));
-
     const resolveNames = async (ids, Model, fieldName = 'name') => {
       const validIds = ids.filter(isObjectId);
-      if (!validIds.length) {
-        // Already plain strings (names) — return as-is
-        return ids;
-      }
+      if (!validIds.length) return ids;
       const docs = await Model.find({ _id: { $in: validIds } }).select(fieldName).lean();
       const map   = {};
       for (const d of docs) map[String(d._id)] = d[fieldName];
-      return ids.map(id => map[String(id)] || String(id)); // fallback = raw value
+      return ids.map(id => map[String(id)] || String(id));
     };
 
     const [teacherNames, subjectNames, roomNames] = await Promise.all([
@@ -479,193 +393,101 @@ const seedFromSetup = async (req, res) => {
       resolveNames(rooms,    Room,    'name'),
     ]);
 
-    console.log('[Seed] Resolved names →',
-      'teachers:', teacherNames,
-      'subjects:', subjectNames,
-      'rooms:',    roomNames
-    );
-
     const ts = Math.min(Math.max(Number(timeSlots) || 6, 1), 8);
     const HOURS = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00'];
-
-    /* 4. Generate entries (round-robin) using resolved names */
     const entries = [];
     let tIdx = 0, sIdx = 0, rIdx = 0;
 
     for (const day of workingDays) {
       for (let slot = 0; slot < ts; slot++) {
-        const startTime = HOURS[slot]     || `${String(8 + slot).padStart(2,'0')}:00`;
+        const startTime = HOURS[slot] || `${String(8 + slot).padStart(2,'0')}:00`;
         const endTime   = HOURS[slot + 1] || `${String(9 + slot).padStart(2,'0')}:00`;
-
-        const subjectName = subjectNames[sIdx % subjectNames.length];
-        const teacherName = teacherNames[tIdx % teacherNames.length];
-        const roomName    = roomNames[rIdx   % roomNames.length];
-
         entries.push({
-          subject:   subjectName,
-          teacher:   teacherName,
-          room:      roomName,
-          // Keep raw refs for traceability
+          subject:   subjectNames[sIdx % subjectNames.length],
+          teacher:   teacherNames[tIdx % teacherNames.length],
+          room:      roomNames[rIdx   % roomNames.length],
           subjectId: String(subjects[sIdx % subjects.length]),
           teacherId: String(teachers[tIdx % teachers.length]),
           roomId:    String(rooms[rIdx   % rooms.length]),
-          day,
-          startTime,
-          endTime,
-          slot:   slot + 1,
-          status: 'draft',
+          day, startTime, endTime, slot: slot + 1, status: 'draft',
         });
         tIdx++; sIdx++; rIdx++;
       }
     }
 
-    /* 5. Drop all existing entries first (prevents E11000) */
-    console.log('[Seed] Clearing existing timetable entries…');
     await Timetable.deleteMany({});
-
-    /* 6. Drop any stale indexes that could cause conflicts, then recreate */
-    try {
-      await Timetable.collection.dropIndexes();
-    } catch (_) { /* ignore if no indexes to drop */ }
-
-    /* 7. Insert fresh entries */
-    console.log(`[Seed] Inserting ${entries.length} entries…`);
+    try { await Timetable.collection.dropIndexes(); } catch (_) {}
     const inserted = await Timetable.insertMany(entries, { ordered: false });
-
-    console.log(`[Seed] Done — ${inserted.length} entries created`);
-    res.status(201).json({
-      success: true,
-      message: `Timetable seeded with ${inserted.length} entries from latest AI Setup`,
-      count:   inserted.length,
-      days:    workingDays,
-      slotsPerDay: ts,
-    });
-
+    res.status(201).json({ success: true, count: inserted.length, days: workingDays, slotsPerDay: ts });
   } catch (err) {
-    // Handle duplicate key gracefully
     if (err.code === 11000) {
-      console.error('[Seed] E11000 duplicate key — retrying with deleteMany…');
       try {
         await Timetable.deleteMany({});
-        return res.status(409).json({
-          success: false,
-          message: 'Duplicate key conflict cleared — please click Regenerate again',
-        });
-      } catch (retryErr) {
-        return res.status(500).json({ success: false, message: 'Seed failed: ' + retryErr.message });
-      }
+        return res.status(409).json({ success: false, message: 'Duplicate key conflict cleared' });
+      } catch (retryErr) { return res.status(500).json({ success: false }); }
     }
-    console.error('[Seed] seedFromSetup error:', err.message);
-    res.status(500).json({ success: false, message: 'Seed failed: ' + err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
-/* ── PUT /api/timetables/approve ── Mark all entries as "approved" */
 const approveTimetable = async (req, res) => {
   try {
     const total = await Timetable.countDocuments();
-    if (!total)
-      return res.status(400).json({ success: false, message: 'No timetable entries to approve — seed first' });
-
-    /* Check for conflicts before approving */
-    const entries   = await Timetable.find().lean();
+    if (!total) return res.status(400).json({ success: false, message: 'No entries' });
+    const entries = await Timetable.find().lean();
     const conflicts = detectConflicts(entries);
-    if (conflicts.some(c => c.severity === 'high'))
-      return res.status(422).json({
-        success:        false,
-        message:        `Cannot approve — ${conflicts.filter(c => c.severity === 'high').length} high-severity conflict(s) exist`,
-        conflictCount:  conflicts.length,
-        conflicts:      conflicts.slice(0, 5), // sample for UI
-      });
-
+    if (conflicts.some(c => c.severity === 'high')) return res.status(422).json({ success: false });
     const result = await Timetable.updateMany({}, { $set: { status: 'approved' } });
-
-    console.log(`[Approve] ${result.modifiedCount} entries set to approved`);
-    res.json({
-      success:       true,
-      message:       `${result.modifiedCount} timetable entries approved`,
-      approvedCount: result.modifiedCount,
-      approvedAt:    new Date().toISOString(),
-    });
-  } catch (err) {
-    console.error('[Approve] error:', err.message);
-    res.status(500).json({ success: false, message: 'Approval failed: ' + err.message });
-  }
+    res.json({ success: true, approvedCount: result.modifiedCount });
+  } catch (err) { res.status(500).json({ success: false }); }
 };
 
-/* ── PUT /api/timetables/publish ── Mark all "approved" entries as "published" */
 const publishTimetable = async (req, res) => {
   try {
-    const total    = await Timetable.countDocuments();
-    if (!total)
-      return res.status(400).json({ success: false, message: 'No timetable entries to publish — seed & approve first' });
-
-    /* Require all entries to be approved first */
+    const total = await Timetable.countDocuments();
+    if (!total) return res.status(400).json({ success: false });
     const notApproved = await Timetable.countDocuments({ status: { $nin: ['approved', 'published'] } });
-    if (notApproved > 0)
-      return res.status(422).json({
-        success: false,
-        message: `${notApproved} entrie(s) are not yet approved — approve the full timetable first`,
-      });
-
-    const result = await Timetable.updateMany(
-      { status: 'approved' },
-      { $set: { status: 'published' } }
-    );
-
-    console.log(`[Publish] ${result.modifiedCount} entries published`);
-    res.json({
-      success:        true,
-      message:        `Timetable published — ${result.modifiedCount} entries are now live`,
-      publishedCount: result.modifiedCount,
-      publishedAt:    new Date().toISOString(),
-    });
-  } catch (err) {
-    console.error('[Publish] error:', err.message);
-    res.status(500).json({ success: false, message: 'Publish failed: ' + err.message });
-  }
+    if (notApproved > 0) return res.status(422).json({ success: false });
+    const result = await Timetable.updateMany({ status: 'approved' }, { $set: { status: 'published' } });
+    res.json({ success: true, publishedCount: result.modifiedCount });
+  } catch (err) { res.status(500).json({ success: false }); }
 };
 
-/* ── POST /api/timetables ── Create a single entry */
 const createTimetable = async (req, res) => {
   try {
-    const { subject, teacher, room, day, startTime, endTime } = req.body;
-    if (!subject)   return res.status(400).json({ success: false, message: 'subject is required' });
-    if (!teacher)   return res.status(400).json({ success: false, message: 'teacher is required' });
-    if (!room)      return res.status(400).json({ success: false, message: 'room is required' });
-    if (!day)       return res.status(400).json({ success: false, message: 'day is required' });
-    if (!startTime) return res.status(400).json({ success: false, message: 'startTime is required' });
-    if (!endTime)   return res.status(400).json({ success: false, message: 'endTime is required' });
-
-    const entry = await Timetable.create({ subject, teacher, room, day, startTime, endTime });
-    res.status(201).json({ success: true, data: entry });
+    const entry = await Timetable.create(req.body);
+    const populated = await Timetable.findById(entry._id)
+      .populate('subjectId', 'name department weeklyHours')
+      .populate('teacherId', 'name department maxWeeklyHours')
+      .populate('roomId',    'name type capacity')
+      .lean();
+    res.status(201).json({ success: true, data: populated });
   } catch (err) {
-    console.error('[Timetable] createTimetable error:', err.message);
-    res.status(500).json({ success: false, message: 'Failed to create entry: ' + err.message });
+    res.status(400).json({ success: false, message: err.message });
   }
 };
 
-/* ── PUT /api/timetables/:id ── Update one entry */
 const updateTimetable = async (req, res) => {
   try {
-    const entry = await Timetable.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
-    if (!entry) return res.status(404).json({ success: false, message: 'Entry not found' });
-    res.json({ success: true, data: entry });
+    const entry = await Timetable.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true })
+      .populate('subjectId', 'name department weeklyHours')
+      .populate('teacherId', 'name department maxWeeklyHours')
+      .populate('roomId',    'name type capacity')
+      .lean();
+    if (!entry) return res.status(404).json({ success: false, message: 'Not found' });
+    res.status(200).json({ success: true, data: entry });
   } catch (err) {
-    console.error('[Timetable] updateTimetable error:', err.message);
-    res.status(500).json({ success: false, message: 'Failed to update entry: ' + err.message });
+    res.status(400).json({ success: false, message: err.message });
   }
 };
 
-/* ── DELETE /api/timetables/:id ── Delete one entry */
 const deleteTimetable = async (req, res) => {
   try {
     const entry = await Timetable.findByIdAndDelete(req.params.id);
-    if (!entry) return res.status(404).json({ success: false, message: 'Entry not found' });
-    res.json({ success: true, message: 'Entry deleted' });
+    if (!entry) return res.status(404).json({ success: false, message: 'Not found' });
+    res.status(200).json({ success: true, message: 'Deleted' });
   } catch (err) {
-    console.error('[Timetable] deleteTimetable error:', err.message);
-    res.status(500).json({ success: false, message: 'Failed to delete entry: ' + err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 

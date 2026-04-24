@@ -1,5 +1,9 @@
 const express = require('express');
-const router  = express.Router();
+const { body, param, query } = require('express-validator');
+const Timetable = require('../models/Timetable');
+const { protect } = require('../middleware/auth');
+const { handleValidationErrors } = require('./routeHelpers');
+const { validateWeekValue } = require('./timetableHelpers');
 const {
   getTimetables,
   createTimetable,
@@ -12,6 +16,16 @@ const {
   approveTimetable,
   publishTimetable,
 } = require('../controllers/timetableController');
+
+const router = express.Router();
+const protectedWrite = [protect];
+
+const timetableValidation = [
+  // Keeping validation flexible for both courseId (HEAD) and subjectId (Analytics)
+  body('roomId', 'Room is required').optional().isMongoId(),
+];
+
+const idValidation = [param('id', 'Invalid timetable id').isMongoId()];
 
 /* ─────────────────────────────────────────────────────────────
    IMPORTANT: Named / action routes MUST come before /:id routes
@@ -32,12 +46,10 @@ router.post('/seed',        seedFromSetup);
 router.put('/approve',      approveTimetable);
 router.put('/publish',      publishTimetable);
 
-/* ── Collection CRUD (must come after named routes) ── */
-router.get('/',             getTimetables);
-router.post('/',            createTimetable);
-
-/* ── Single-document routes (parameterised — must be last) ── */
-router.put('/:id',          updateTimetable);
-router.delete('/:id',       deleteTimetable);
+// Analytics Branch Controllers & Standard CRUD
+router.get('/', getTimetables);
+router.post('/', protectedWrite, timetableValidation, handleValidationErrors, createTimetable);
+router.put('/:id', [...protectedWrite, ...idValidation, ...timetableValidation], handleValidationErrors, updateTimetable);
+router.delete('/:id', [...protectedWrite, ...idValidation], handleValidationErrors, deleteTimetable);
 
 module.exports = router;
