@@ -15,6 +15,7 @@ const {
   seedFromSetup,
   approveTimetable,
   publishTimetable,
+  clearTimetableData,
 } = require('../controllers/timetableController');
 
 const router = express.Router();
@@ -33,18 +34,22 @@ const idValidation = [param('id', 'Invalid timetable id').isMongoId()];
 ───────────────────────────────────────────────────────────── */
 
 /* ── Conflict detection ── */
-router.get('/conflicts',    getConflicts);
+router.get('/conflicts', getConflicts);
 
 /* ── AI Optimization ── */
-router.post('/optimize',    optimizeTimetable);
+router.post('/optimize', optimizeTimetable);
 router.post('/apply-fixes', applyFixes);
 
 /* ── Seed DB from latest AISetup ── */
-router.post('/seed',        seedFromSetup);
+router.post('/seed', seedFromSetup);
+
+/* ── Clear all timetable module data ── */
+router.post('/clear', clearTimetableData);
+router.delete('/clear', clearTimetableData);
 
 /* ── Approve & Publish workflow ── */
-router.put('/approve',      approveTimetable);
-router.put('/publish',      publishTimetable);
+router.put('/approve', approveTimetable);
+router.put('/publish', publishTimetable);
 
 // Analytics Branch Controllers & Standard CRUD
 router.get('/', getTimetables);

@@ -26,6 +26,9 @@ export const toMinutes = (value = '00:00') => {
   return hours * 60 + minutes;
 };
 
+export const isIntervalTimeslot = (slot) =>
+  slot?.startTime === '12:00' && slot?.endTime === '13:00';
+
 export const compareSlots = (left, right) => {
   if (!left && !right) {
     return 0;
@@ -196,30 +199,39 @@ export const getConflictListFromError = (error) =>
     ? error.response.data.conflicts
     : [];
 
-export const validateTimetableEntryForm = (formData, resources = {}) => {
+export const validateTimetableEntryForm = (
+  formData,
+  resources = {},
+  options = {}
+) => {
   const issues = [];
   const { courses = [], lecturers = [], rooms = [], timeslots = [] } = resources;
+  const selectedSlot = timeslots.find((item) => item._id === formData?.timeslotId);
+  const isIntervalEntry =
+    options.allowInterval === true || isIntervalTimeslot(selectedSlot);
 
   if (!weekPattern.test(formData?.week || '')) {
     issues.push(createValidationIssue('Week is required and must follow the YYYY-Www format.'));
   }
 
-  if (!formData?.courseId) {
-    issues.push(createValidationIssue('Please select a course.'));
-  } else if (!courses.some((item) => item._id === formData.courseId)) {
-    issues.push(createValidationIssue('The selected course could not be found.'));
-  }
+  if (!isIntervalEntry) {
+    if (!formData?.courseId) {
+      issues.push(createValidationIssue('Please select a course.'));
+    } else if (!courses.some((item) => item._id === formData.courseId)) {
+      issues.push(createValidationIssue('The selected course could not be found.'));
+    }
 
-  if (!formData?.lecturerId) {
-    issues.push(createValidationIssue('Please select a lecturer.'));
-  } else if (!lecturers.some((item) => item._id === formData.lecturerId)) {
-    issues.push(createValidationIssue('The selected lecturer could not be found.'));
-  }
+    if (!formData?.lecturerId) {
+      issues.push(createValidationIssue('Please select a lecturer.'));
+    } else if (!lecturers.some((item) => item._id === formData.lecturerId)) {
+      issues.push(createValidationIssue('The selected lecturer could not be found.'));
+    }
 
-  if (!formData?.roomId) {
-    issues.push(createValidationIssue('Please select a room.'));
-  } else if (!rooms.some((item) => item._id === formData.roomId)) {
-    issues.push(createValidationIssue('The selected room could not be found.'));
+    if (!formData?.roomId) {
+      issues.push(createValidationIssue('Please select a room.'));
+    } else if (!rooms.some((item) => item._id === formData.roomId)) {
+      issues.push(createValidationIssue('The selected room could not be found.'));
+    }
   }
 
   if (!formData?.timeslotId) {
@@ -454,6 +466,12 @@ export const buildClientConflicts = ({
   currentEntryId,
 }) => {
   const { courses = [], lecturers = [], rooms = [], timeslots = [] } = resources;
+
+  const selectedSlot = timeslots.find((item) => item._id === formData?.timeslotId);
+
+  if (isIntervalTimeslot(selectedSlot)) {
+    return [];
+  }
 
   if (
     !formData?.courseId ||

@@ -104,6 +104,7 @@ function normalizeTeacher(doc = {}, source = 'teachers') {
     name: name || 'Unknown Faculty',
     department: normalizeText(pickFirst(doc, ['department', 'dept', 'facultyDepartment', 'school'])),
     maxWeeklyHours: Number(pickFirst(doc, ['maxWeeklyHours', 'maxHours', 'weeklyLimit'])) || 20,
+    availability: toArray(doc.availability),
     sourceCollection: source,
   };
 }

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  FaCalendarWeek,
   FaCheckCircle,
   FaBolt,
   FaBook,
@@ -20,12 +19,14 @@ import {
   formatWeekLabel,
   getConflictListFromError,
   getCurrentWeekValue,
+  isIntervalTimeslot,
   getLecturerScheduleSuggestions,
   getLecturerDisplayLabel,
   getSelectableTimeSlots,
-  toMinutes,
   validateTimetableEntryForm,
 } from './timetableUtils';
+
+const WEEKDAY_VALUES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
 const createDefaultForm = () => ({
   courseId: '',
@@ -38,12 +39,12 @@ const createDefaultForm = () => ({
 const createFormState = (initialData = null) =>
   initialData
     ? {
-        courseId: initialData.courseId?._id || initialData.courseId || '',
-        lecturerId: initialData.lecturerId?._id || initialData.lecturerId || '',
-        roomId: initialData.roomId?._id || initialData.roomId || '',
-        timeslotId: initialData.timeslotId?._id || initialData.timeslotId || '',
-        week: initialData.week || getCurrentWeekValue(),
-      }
+      courseId: initialData.courseId?._id || initialData.courseId || '',
+      lecturerId: initialData.lecturerId?._id || initialData.lecturerId || '',
+      roomId: initialData.roomId?._id || initialData.roomId || '',
+      timeslotId: initialData.timeslotId?._id || initialData.timeslotId || '',
+      week: initialData.week || getCurrentWeekValue(),
+    }
     : createDefaultForm();
 
 const resourceConfig = [
@@ -64,12 +65,6 @@ const resourceConfig = [
     field: 'roomId',
     icon: <FaDoorOpen />,
     buttonLabel: 'Add Room',
-  },
-  {
-    type: 'timeslot',
-    field: 'timeslotId',
-    icon: <FaClock />,
-    buttonLabel: 'Add TimeSlot',
   },
 ];
 
@@ -93,12 +88,6 @@ const TimeTableForm = ({
   const [editingLecturerId, setEditingLecturerId] = useState('');
   const [formVersion, setFormVersion] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  const [slotGenerator, setSlotGenerator] = useState({
-    startTime: '09:00',
-    endTime: '18:00',
-    interval: '60',
-  });
-  const [generatingSlots, setGeneratingSlots] = useState(false);
 
   useEffect(() => {
     setFormData(createFormState(initialData));
@@ -106,12 +95,19 @@ const TimeTableForm = ({
     setServerConflicts([]);
   }, [initialData]);
 
-  const clientConflicts = buildClientConflicts({
-    entries: existingEntries,
-    formData,
-    resources,
-    currentEntryId: initialData?._id,
-  });
+  const selectedTimeSlot = resources.timeslots.find(
+    (item) => item._id === formData.timeslotId
+  );
+  const isIntervalEntry = isIntervalTimeslot(selectedTimeSlot);
+
+  const clientConflicts = isIntervalEntry
+    ? []
+    : buildClientConflicts({
+      entries: existingEntries,
+      formData,
+      resources,
+      currentEntryId: initialData?._id,
+    });
 
   const selectedCourse = resources.courses.find(
     (item) => item._id === formData.courseId
@@ -120,10 +116,6 @@ const TimeTableForm = ({
     (item) => item._id === formData.lecturerId
   );
   const selectedRoom = resources.rooms.find((item) => item._id === formData.roomId);
-  const selectedTimeSlot = resources.timeslots.find(
-    (item) => item._id === formData.timeslotId
-  );
-
   const lecturerSuggestions = useMemo(
     () =>
       getLecturerScheduleSuggestions({
@@ -159,16 +151,16 @@ const TimeTableForm = ({
     ? latestPresetByCourse[formData.courseId]
     : null;
 
-  const selectableTimeSlots = useMemo(
-    () =>
-      getSelectableTimeSlots({
-        entries: existingEntries,
-        formData,
-        resources,
-        currentEntryId: initialData?._id,
-      }),
-    [existingEntries, formData, resources, initialData?._id]
-  );
+  const selectableTimeSlots = useMemo(() => {
+    const filtered = getSelectableTimeSlots({
+      entries: existingEntries,
+      formData,
+      resources,
+      currentEntryId: initialData?._id,
+    });
+
+    return filtered.filter((slot) => WEEKDAY_VALUES.includes(slot.day));
+  }, [existingEntries, formData, resources, initialData?._id]);
 
   const hiddenTimeSlotCount = Math.max(
     resources.timeslots.length - selectableTimeSlots.length,
@@ -181,8 +173,8 @@ const TimeTableForm = ({
     formIssues.length > 0
       ? formIssues
       : serverConflicts.length > 0
-      ? serverConflicts
-      : clientConflicts;
+        ? serverConflicts
+        : clientConflicts;
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -211,6 +203,29 @@ const TimeTableForm = ({
     }
   }, [formData.timeslotId, selectableTimeSlots]);
 
+  useEffect(() => {
+    if (!isIntervalEntry) {
+      return;
+    }
+
+    setFormData((previousState) => {
+      if (
+        !previousState.courseId &&
+        !previousState.lecturerId &&
+        !previousState.roomId
+      ) {
+        return previousState;
+      }
+
+      return {
+        ...previousState,
+        courseId: '',
+        lecturerId: '',
+        roomId: '',
+      };
+    });
+  }, [isIntervalEntry]);
+
   const handleResourceSubmit = async (entityType, payload) => {
     const editMode = entityType === 'lecturer' && Boolean(editingLecturerId);
     const createdEntity = await onCreateResource(entityType, payload, {
@@ -231,78 +246,6 @@ const TimeTableForm = ({
     }
 
     return createdEntity;
-  };
-
-  const handleGenerateWeeklyTimeSlots = async () => {
-    const intervalMinutes = Number(slotGenerator.interval || 60);
-    const startMinutes = toMinutes(slotGenerator.startTime || '09:00');
-    const endMinutes = toMinutes(slotGenerator.endTime || '18:00');
-
-    if (intervalMinutes <= 0 || endMinutes <= startMinutes) {
-      setFormIssues([
-        {
-          type: 'validation',
-          message: 'Time slot generator needs a valid start, end, and interval.',
-        },
-      ]);
-      return;
-    }
-
-    const existingSlotKeys = new Set(
-      resources.timeslots.map((slot) => `${slot.day}|${slot.startTime}|${slot.endTime}`)
-    );
-
-    const toTimeString = (valueInMinutes) => {
-      const hours = String(Math.floor(valueInMinutes / 60)).padStart(2, '0');
-      const minutes = String(valueInMinutes % 60).padStart(2, '0');
-      return `${hours}:${minutes}`;
-    };
-
-    const slotsToCreate = [];
-
-    for (const day of dayOrder) {
-      for (
-        let current = startMinutes;
-        current + intervalMinutes <= endMinutes;
-        current += intervalMinutes
-      ) {
-        const startTime = toTimeString(current);
-        const endTime = toTimeString(current + intervalMinutes);
-        const key = `${day}|${startTime}|${endTime}`;
-
-        if (!existingSlotKeys.has(key)) {
-          slotsToCreate.push({
-            day,
-            startTime,
-            endTime,
-          });
-          existingSlotKeys.add(key);
-        }
-      }
-    }
-
-    if (slotsToCreate.length === 0) {
-      setFormIssues([]);
-      setServerConflicts([]);
-      return;
-    }
-
-    setGeneratingSlots(true);
-    setFormIssues([]);
-    setServerConflicts([]);
-
-    try {
-      for (const slot of slotsToCreate) {
-        await onCreateResource('timeslot', slot, {
-          mode: 'create',
-          silent: true,
-        });
-      }
-    } catch (error) {
-      setServerConflicts(getConflictListFromError(error));
-    } finally {
-      setGeneratingSlots(false);
-    }
   };
 
   const applyQuickPreset = (preset, options = {}) => {
@@ -347,7 +290,9 @@ const TimeTableForm = ({
     const submitIntent =
       event?.nativeEvent?.submitter?.dataset?.intent || 'default';
 
-    const validationIssues = validateTimetableEntryForm(formData, resources);
+    const validationIssues = validateTimetableEntryForm(formData, resources, {
+      allowInterval: isIntervalEntry,
+    });
 
     if (validationIssues.length > 0) {
       setFormIssues(validationIssues);
@@ -362,7 +307,19 @@ const TimeTableForm = ({
     setSubmitting(true);
 
     try {
-      await onSubmit(formData, { submitIntent });
+      const payload = isIntervalEntry
+        ? {
+          ...formData,
+          courseId: '',
+          lecturerId: '',
+          roomId: '',
+          subject: 'Interval',
+          teacher: 'Interval',
+          room: 'Interval',
+        }
+        : formData;
+
+      await onSubmit(payload, { submitIntent });
 
       if (!isEdit && submitIntent === 'add-next') {
         setFormData({
@@ -426,72 +383,6 @@ const TimeTableForm = ({
               {config.icon} {config.buttonLabel}
             </button>
           ))}
-        </div>
-
-        <div className="timetable-slot-generator">
-          <div className="timetable-quick-memory-header">
-            <h4>
-              <FaCalendarWeek /> Weekly Time Slot Generator
-            </h4>
-            <p>
-              Auto-create slots from Monday to Sunday so you don’t need to add each slot manually.
-            </p>
-          </div>
-
-          <div className="timetable-inline-actions">
-            <div className="form-group">
-              <label htmlFor="slotGenStart">Start</label>
-              <input
-                id="slotGenStart"
-                type="time"
-                value={slotGenerator.startTime}
-                onChange={(event) =>
-                  setSlotGenerator((previousState) => ({
-                    ...previousState,
-                    startTime: event.target.value,
-                  }))
-                }
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="slotGenEnd">End</label>
-              <input
-                id="slotGenEnd"
-                type="time"
-                value={slotGenerator.endTime}
-                onChange={(event) =>
-                  setSlotGenerator((previousState) => ({
-                    ...previousState,
-                    endTime: event.target.value,
-                  }))
-                }
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="slotGenInterval">Interval</label>
-              <select
-                id="slotGenInterval"
-                value={slotGenerator.interval}
-                onChange={(event) =>
-                  setSlotGenerator((previousState) => ({
-                    ...previousState,
-                    interval: event.target.value,
-                  }))
-                }
-              >
-                <option value="60">60 minutes</option>
-                <option value="30">30 minutes</option>
-              </select>
-            </div>
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={handleGenerateWeeklyTimeSlots}
-              disabled={generatingSlots}
-            >
-              <FaClock /> {generatingSlots ? 'Generating...' : 'Generate Monday–Sunday Slots'}
-            </button>
-          </div>
         </div>
 
         <div className="timetable-quick-memory">
@@ -576,77 +467,88 @@ const TimeTableForm = ({
               </p>
             </div>
 
-            <div className="form-group">
-              <label htmlFor="courseId">Course</label>
-              <select
-                id="courseId"
-                name="courseId"
-                value={formData.courseId}
-                onChange={handleChange}
-                required
-              >
-                <option value="">Select a course</option>
-                {resources.courses.map((course) => (
-                  <option key={course._id} value={course._id}>
-                    {course.code} - {course.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {!isIntervalEntry ? (
+              <div className="form-group">
+                <label htmlFor="courseId">Course</label>
+                <select
+                  id="courseId"
+                  name="courseId"
+                  value={formData.courseId}
+                  onChange={handleChange}
+                  required
+                >
+                  <option value="">Select a course</option>
+                  {resources.courses.map((course) => (
+                    <option key={course._id} value={course._id}>
+                      {course.code} - {course.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
 
-            <div className="form-group">
-              <label htmlFor="lecturerId">Lecturer</label>
-              {resources.lecturers.length === 0 ? (
-                <div className="timetable-summary-card">
-                  <strong>No lecturers added yet</strong>
-                  <p>
-                    Create a lecturer first so this timetable entry can be
-                    assigned correctly.
-                  </p>
-                  <div
-                    className="timetable-inline-actions"
-                    style={{ marginTop: '0.75rem' }}
-                  >
-                    <button
-                      type="button"
-                      className="btn btn-outline btn-sm"
-                      onClick={() => setActiveModalType('lecturer')}
+            {!isIntervalEntry ? (
+              <div className="form-group">
+                <label htmlFor="lecturerId">Lecturer</label>
+                {resources.lecturers.length === 0 ? (
+                  <div className="timetable-summary-card">
+                    <strong>No lecturers added yet</strong>
+                    <p>
+                      Create a lecturer first so this timetable entry can be
+                      assigned correctly.
+                    </p>
+                    <div
+                      className="timetable-inline-actions"
+                      style={{ marginTop: '0.75rem' }}
                     >
-                      <FaChalkboardTeacher /> Add Lecturer
-                    </button>
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        onClick={() => setActiveModalType('lecturer')}
+                      >
+                        <FaChalkboardTeacher /> Add Lecturer
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <>
-                  <select
-                    id="lecturerId"
-                    name="lecturerId"
-                    value={formData.lecturerId}
-                    onChange={handleChange}
-                    required
-                  >
-                    <option value="">Select a lecturer</option>
-                    {resources.lecturers.map((lecturer) => (
-                      <option key={lecturer._id} value={lecturer._id}>
-                        {getLecturerDisplayLabel(lecturer)}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="timetable-inline-actions" style={{ marginTop: '0.5rem' }}>
-                    <button
-                      type="button"
-                      className="btn btn-outline btn-sm"
-                      disabled={!formData.lecturerId}
-                      onClick={() => setEditingLecturerId(formData.lecturerId)}
+                ) : (
+                  <>
+                    <select
+                      id="lecturerId"
+                      name="lecturerId"
+                      value={formData.lecturerId}
+                      onChange={handleChange}
+                      required
                     >
-                      <FaPen /> Edit Lecturer Availability
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
+                      <option value="">Select a lecturer</option>
+                      {resources.lecturers.map((lecturer) => (
+                        <option key={lecturer._id} value={lecturer._id}>
+                          {getLecturerDisplayLabel(lecturer)}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="timetable-inline-actions" style={{ marginTop: '0.5rem' }}>
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        disabled={!formData.lecturerId}
+                        onClick={() => setEditingLecturerId(formData.lecturerId)}
+                      >
+                        <FaPen /> Edit Lecturer Availability
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="timetable-summary-card">
+                <strong>Interval Entry</strong>
+                <p>
+                  12:00–13:00 is treated as interval. Course, lecturer, and room are hidden for this entry.
+                </p>
+              </div>
+            )}
 
-            {selectedLecturer ? (
+            {selectedLecturer && !isIntervalEntry ? (
               <div className="timetable-lecturer-availability">
                 <strong>Lecturer Availability</strong>
                 {lecturerAvailabilityWindows.length > 0 ? (
@@ -668,7 +570,7 @@ const TimeTableForm = ({
               </div>
             ) : null}
 
-            {formData.lecturerId ? (
+            {formData.lecturerId && !isIntervalEntry ? (
               <div className="timetable-lecturer-suggestions">
                 <div className="timetable-quick-memory-header">
                   <h4>
@@ -718,23 +620,25 @@ const TimeTableForm = ({
               </div>
             ) : null}
 
-            <div className="form-group">
-              <label htmlFor="roomId">Room</label>
-              <select
-                id="roomId"
-                name="roomId"
-                value={formData.roomId}
-                onChange={handleChange}
-                required
-              >
-                <option value="">Select a room</option>
-                {resources.rooms.map((room) => (
-                  <option key={room._id} value={room._id}>
-                    {room.name} ({room.type})
-                  </option>
-                ))}
-              </select>
-            </div>
+            {!isIntervalEntry ? (
+              <div className="form-group">
+                <label htmlFor="roomId">Room</label>
+                <select
+                  id="roomId"
+                  name="roomId"
+                  value={formData.roomId}
+                  onChange={handleChange}
+                  required
+                >
+                  <option value="">Select a room</option>
+                  {resources.rooms.map((room) => (
+                    <option key={room._id} value={room._id}>
+                      {room.name} ({room.type})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
 
             <div className="form-group">
               <label htmlFor="timeslotId">Time Slot</label>
@@ -757,6 +661,7 @@ const TimeTableForm = ({
                   Showing lecturer-available and conflict-free slots only.
                 </p>
               ) : null}
+              <p className="timetable-helper-text">Only Monday to Friday slots are selectable for entries.</p>
               {hiddenTimeSlotCount > 0 ? (
                 <p className="timetable-helper-text">
                   {hiddenTimeSlotCount} conflicting slot(s) hidden for current selections.
@@ -769,17 +674,21 @@ const TimeTableForm = ({
             <div className="timetable-summary-card">
               <strong>Selected Course</strong>
               <p>
-                {selectedCourse
-                  ? `${selectedCourse.code} • ${selectedCourse.department} • ${selectedCourse.sessionsPerWeek} sessions/week`
-                  : 'Pick a course to see department and load details.'}
+                {isIntervalEntry
+                  ? 'Interval block'
+                  : selectedCourse
+                    ? `${selectedCourse.code} • ${selectedCourse.department} • ${selectedCourse.sessionsPerWeek} sessions/week`
+                    : 'Pick a course to see department and load details.'}
               </p>
             </div>
             <div className="timetable-summary-card">
               <strong>Selected Lecturer</strong>
               <p>
-                {selectedLecturer
-                  ? getLecturerDisplayLabel(selectedLecturer)
-                  : 'Pick a lecturer to verify department and availability.'}
+                {isIntervalEntry
+                  ? 'Interval period'
+                  : selectedLecturer
+                    ? getLecturerDisplayLabel(selectedLecturer)
+                    : 'Pick a lecturer to verify department and availability.'}
               </p>
             </div>
             <div className="timetable-summary-card">
@@ -787,8 +696,8 @@ const TimeTableForm = ({
               <p>
                 {selectedRoom && selectedTimeSlot
                   ? `${selectedRoom.name} • ${selectedTimeSlot.day} • ${formatTimeRange(
-                      selectedTimeSlot
-                    )}`
+                    selectedTimeSlot
+                  )}`
                   : 'Pick a room and time slot to complete the entry.'}
               </p>
             </div>
@@ -803,8 +712,8 @@ const TimeTableForm = ({
               {submitting
                 ? 'Saving...'
                 : isEdit
-                ? 'Update Timetable Entry'
-                : 'Create Timetable Entry'}
+                  ? 'Update Timetable Entry'
+                  : 'Create Timetable Entry'}
             </button>
             {!isEdit ? (
               <button

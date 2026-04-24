@@ -7,6 +7,9 @@ const AISetup   = require('../models/AISetup');
 const Teacher   = require('../models/Teacher');
 const Subject   = require('../models/Subject');
 const Room      = require('../models/Room');
+const Course = require('../models/Course');
+const Lecturer = require('../models/Lecturer');
+const TimeSlot = require('../models/TimeSlot');
 const { getUnifiedAnalyticsData } = require('../utils/analyticsNormalizer');
 
 /* ──────────────────────────────────────────────────────────
@@ -453,13 +456,93 @@ const publishTimetable = async (req, res) => {
   } catch (err) { res.status(500).json({ success: false }); }
 };
 
+const normalizeObjectIdValue = (value) => {
+  if (value == null) {
+    return undefined;
+  }
+
+  if (typeof value === 'string' && !value.trim()) {
+    return undefined;
+  }
+
+  return value;
+};
+
+const isIntervalWindow = (slot) =>
+  slot && slot.startTime === '12:00' && slot.endTime === '13:00';
+
+const buildTimetablePayload = async (input = {}) => {
+  const payload = {
+    ...input,
+    courseId: normalizeObjectIdValue(input.courseId),
+    lecturerId: normalizeObjectIdValue(input.lecturerId),
+    roomId: normalizeObjectIdValue(input.roomId),
+    timeslotId: normalizeObjectIdValue(input.timeslotId),
+  };
+
+  let slot = null;
+
+  if (payload.timeslotId) {
+    slot = await TimeSlot.findById(payload.timeslotId).lean();
+
+    if (slot) {
+      payload.day = slot.day;
+      payload.startTime = slot.startTime;
+      payload.endTime = slot.endTime;
+    }
+  }
+
+  const isIntervalEntry = isIntervalWindow(slot);
+
+  if (isIntervalEntry) {
+    payload.courseId = undefined;
+    payload.lecturerId = undefined;
+    payload.roomId = undefined;
+    payload.subject = 'Interval';
+    payload.teacher = 'Interval';
+    payload.room = 'Interval';
+  }
+
+  return payload;
+};
+
+const clearTimetableData = async (req, res) => {
+  try {
+    const [timetables, courses, lecturers, rooms, timeslots] = await Promise.all([
+      Timetable.deleteMany({}),
+      Course.deleteMany({}),
+      Lecturer.deleteMany({}),
+      Room.deleteMany({}),
+      TimeSlot.deleteMany({}),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      message: 'All timetable data cleared successfully',
+      deleted: {
+        timetables: timetables.deletedCount || 0,
+        courses: courses.deletedCount || 0,
+        lecturers: lecturers.deletedCount || 0,
+        rooms: rooms.deletedCount || 0,
+        timeslots: timeslots.deletedCount || 0,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 const createTimetable = async (req, res) => {
   try {
-    const entry = await Timetable.create(req.body);
+    const payload = await buildTimetablePayload(req.body);
+    const entry = await Timetable.create(payload);
     const populated = await Timetable.findById(entry._id)
       .populate('subjectId', 'name department weeklyHours')
       .populate('teacherId', 'name department maxWeeklyHours')
       .populate('roomId',    'name type capacity')
+      .populate('courseId', 'name code department sessionsPerWeek')
+      .populate('lecturerId', 'name department availability')
+      .populate('timeslotId', 'day startTime endTime')
       .lean();
     res.status(201).json({ success: true, data: populated });
   } catch (err) {
@@ -469,10 +552,14 @@ const createTimetable = async (req, res) => {
 
 const updateTimetable = async (req, res) => {
   try {
-    const entry = await Timetable.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true })
+    const payload = await buildTimetablePayload(req.body);
+    const entry = await Timetable.findByIdAndUpdate(req.params.id, payload, { new: true, runValidators: true })
       .populate('subjectId', 'name department weeklyHours')
       .populate('teacherId', 'name department maxWeeklyHours')
       .populate('roomId',    'name type capacity')
+      .populate('courseId', 'name code department sessionsPerWeek')
+      .populate('lecturerId', 'name department availability')
+      .populate('timeslotId', 'day startTime endTime')
       .lean();
     if (!entry) return res.status(404).json({ success: false, message: 'Not found' });
     res.status(200).json({ success: true, data: entry });
@@ -499,6 +586,7 @@ module.exports = {
   seedFromSetup,
   approveTimetable,
   publishTimetable,
+  clearTimetableData,
   createTimetable,
   updateTimetable,
   deleteTimetable,

@@ -25,6 +25,7 @@ exports.getLecturers = async (req, res) => {
       _id:            l._id,
       name:           l.name,
       department:     l.department,
+      availability:   Array.isArray(l.availability) ? l.availability : [],
       maxWeeklyHours: l.maxWeeklyHours,
       lecturerId:     l._id,
       lecturerName:   l.name,

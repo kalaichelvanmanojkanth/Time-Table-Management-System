@@ -27,6 +27,38 @@ const resourceKeyMap = {
   timeslot: 'timeslots',
 };
 
+const STANDARD_TIME_SLOT_DAYS = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+];
+
+const STANDARD_TIME_SLOT_WINDOWS = [
+  ['09:00', '10:00'],
+  ['10:00', '11:00'],
+  ['11:00', '12:00'],
+  ['12:00', '13:00'],
+  ['13:00', '14:00'],
+  ['14:00', '15:00'],
+  ['15:00', '16:00'],
+  ['16:00', '17:00'],
+  ['17:00', '18:00'],
+];
+
+const buildStandardTimeSlots = () => {
+  const slots = [];
+
+  for (const day of STANDARD_TIME_SLOT_DAYS) {
+    for (const [startTime, endTime] of STANDARD_TIME_SLOT_WINDOWS) {
+      slots.push({ day, startTime, endTime });
+    }
+  }
+
+  return slots;
+};
+
 const CreateTimeTable = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -40,7 +72,7 @@ const CreateTimeTable = () => {
   const [entries, setEntries] = useState([]);
 
   const loadFormDependencies = async () => {
-    const [courses, lecturers, rooms, timeslots, timetableEntries] =
+    const [courses, lecturers, rooms, initialTimeslots, timetableEntries] =
       await Promise.all([
         timetableApi.courses.getAll(),
         timetableApi.lecturers.getAll(),
@@ -48,6 +80,27 @@ const CreateTimeTable = () => {
         timetableApi.timeslots.getAll(),
         timetableApi.timetables.list(),
       ]);
+
+    const standardSlots = buildStandardTimeSlots();
+    const existingKeys = new Set(
+      (initialTimeslots.data || []).map(
+        (slot) => `${slot.day}|${slot.startTime}|${slot.endTime}`
+      )
+    );
+    const missingSlots = standardSlots.filter(
+      (slot) => !existingKeys.has(`${slot.day}|${slot.startTime}|${slot.endTime}`)
+    );
+
+    if (missingSlots.length > 0) {
+      await Promise.all(
+        missingSlots.map((slot) => timetableApi.timeslots.create(slot))
+      );
+    }
+
+    const timeslots =
+      missingSlots.length > 0
+        ? await timetableApi.timeslots.getAll()
+        : initialTimeslots;
 
     setResources({
       courses: courses.data,
@@ -138,6 +191,23 @@ const CreateTimeTable = () => {
     setResettingAll(true);
 
     try {
+      await timetableApi.timetables.clear();
+
+      setEntries([]);
+      setResources({
+        courses: [],
+        lecturers: [],
+        rooms: [],
+        timeslots: [],
+      });
+
+      await loadFormDependencies();
+      toast.success('All schedules and timetable resources were reset.');
+      return;
+    } catch (_) {
+    }
+
+    try {
       const [timetableEntries, courses, lecturers, rooms, timeslots] =
         await Promise.all([
           timetableApi.timetables.list(),
@@ -175,6 +245,8 @@ const CreateTimeTable = () => {
         rooms: [],
         timeslots: [],
       });
+
+      await loadFormDependencies();
 
       toast.success('All schedules and timetable resources were reset.');
     } catch (error) {
