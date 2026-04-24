@@ -1,0 +1,397 @@
+import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import {
+  FaCogs, FaExclamationTriangle, FaLightbulb, FaCalendarCheck,
+  FaArrowRight, FaBrain, FaRocket, FaShieldAlt, FaCheckCircle,
+  FaCircle,
+} from 'react-icons/fa';
+import { HiSparkles } from 'react-icons/hi2';
+
+/* ─────────────────────────────────────────
+   Shared Framer Motion Variants
+───────────────────────────────────────── */
+const fadeUp = {
+  hidden:  { opacity: 0, y: 20 },
+  visible: (i = 0) => ({
+    opacity: 1, y: 0,
+    transition: { delay: i * 0.07, duration: 0.45, ease: [0.22, 1, 0.36, 1] },
+  }),
+};
+
+/* ─────────────────────────────────────────
+   Shared PageShell  — used by ALL sub-pages
+───────────────────────────────────────── */
+export function PageShell({ title, subtitle, icon, gradient, breadcrumb, children }) {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-white dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 font-sans">
+
+      {/* ── Premium Hero Header ── */}
+      <div className={`${gradient} relative overflow-hidden`}>
+        {/* animated glow orbs */}
+        <div className="absolute -top-24 -right-24 w-80 h-80 rounded-full bg-white/5 blur-3xl pointer-events-none animate-pulse" style={{ animationDuration: '4s' }} />
+        <div className="absolute -bottom-10 -left-10 w-56 h-56 rounded-full bg-cyan-400/10 blur-3xl pointer-events-none" />
+        <div className="absolute top-1/2 right-1/4 w-40 h-40 rounded-full bg-white/5 blur-2xl pointer-events-none" />
+
+        <div className="relative max-w-6xl mx-auto px-5 sm:px-8 pt-8 pb-10">
+          {/* breadcrumb */}
+          <nav className="flex items-center gap-1.5 text-xs text-white/55 mb-6 flex-wrap">
+            <Link to="/" className="hover:text-white transition-colors font-medium">Home</Link>
+            <span className="opacity-40">/</span>
+            <Link to="/ai-scheduling" className="hover:text-white transition-colors font-medium">AI Scheduling</Link>
+            {breadcrumb && (
+              <>
+                <span className="opacity-40">/</span>
+                <span className="text-white/90 font-semibold">{breadcrumb}</span>
+              </>
+            )}
+          </nav>
+
+          {/* title row */}
+          <div className="flex items-start gap-4">
+            {/* icon box */}
+            <div className="relative flex-shrink-0">
+              <div className="w-14 h-14 bg-white/15 border border-white/25 rounded-2xl flex items-center justify-center text-white text-2xl shadow-xl backdrop-blur-sm">
+                {icon}
+              </div>
+              {/* live pulse dot */}
+              <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-400" />
+              </span>
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white leading-tight tracking-tight">
+                {title}
+              </h1>
+              <p className="text-white/65 text-sm mt-1.5 leading-relaxed max-w-2xl">{subtitle}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Page content ── */}
+      <div className="relative">
+        {/* subtle page-level top glow strip */}
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-indigo-300/30 to-transparent dark:via-indigo-700/30 pointer-events-none" />
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────
+   Shared Section wrapper
+───────────────────────────────────────── */
+export function Section({ title, icon, gradient, badge, children }) {
+  return (
+    <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl border border-slate-200/70 dark:border-slate-700/70 shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden">
+      {/* header */}
+      <div className={`flex items-center justify-between px-5 py-3.5 ${gradient} relative overflow-hidden`}>
+        {/* shimmer */}
+        <div className="absolute inset-0 bg-white/5 pointer-events-none" />
+        <div className="flex items-center gap-2.5 relative">
+          <div className="w-7 h-7 bg-white/20 rounded-lg flex items-center justify-center text-white text-sm shadow-sm">
+            {icon}
+          </div>
+          <h2 className="font-bold text-sm text-white tracking-wide">{title}</h2>
+        </div>
+        {badge != null && (
+          <span className="relative text-xs font-black bg-white/20 border border-white/30 rounded-full px-3 py-0.5 text-white">
+            {badge} selected
+          </span>
+        )}
+      </div>
+      <div className="p-5">{children}</div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────
+   TagChip
+───────────────────────────────────────── */
+export function TagChip({ label, onRemove, colorClass }) {
+  return (
+    <motion.span
+      layout
+      initial={{ opacity: 0, scale: 0.85 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.85 }}
+      className={`group inline-flex items-center gap-1.5 text-xs font-semibold border rounded-full px-3 py-1.5 transition-all duration-200 hover:scale-[1.05] hover:shadow-md ${colorClass}`}
+    >
+      {label}
+      <button
+        onClick={onRemove}
+        className="w-4 h-4 flex items-center justify-center rounded-full opacity-50 group-hover:opacity-100 group-hover:bg-black/10 dark:group-hover:bg-white/20 transition-all duration-150 ml-0.5 leading-none flex-shrink-0"
+        aria-label={`Remove ${label}`}
+      >
+        ✕
+      </button>
+    </motion.span>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   CARDS DATA
+═══════════════════════════════════════════ */
+const CARDS = [
+  {
+    id: 'setup', icon: <FaCogs />, step: '01',
+    title: 'AI Scheduling Setup',
+    desc: 'Configure teachers, subjects, classrooms, constraints, working days, and time slots before running the AI engine.',
+    link: '/ai-scheduling/setup',
+    gradient: 'from-blue-600 to-indigo-700',
+    glow: 'hover:shadow-blue-300/40 dark:hover:shadow-blue-900/50',
+    badgeColor: 'bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800',
+    iconBg: 'from-blue-500 to-indigo-600',
+    dotColor: 'bg-blue-400',
+  },
+  {
+    id: 'conflicts', icon: <FaExclamationTriangle />, step: '02',
+    title: 'Conflict Detection',
+    desc: 'Detect and resolve teacher conflicts, room double-bookings, and subject overlaps automatically with one click.',
+    link: '/ai-scheduling/conflicts',
+    gradient: 'from-amber-500 to-orange-600',
+    glow: 'hover:shadow-amber-300/40 dark:hover:shadow-amber-900/50',
+    badgeColor: 'bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800',
+    iconBg: 'from-amber-500 to-orange-600',
+    dotColor: 'bg-amber-400',
+  },
+  {
+    id: 'optimization', icon: <FaLightbulb />, step: '03',
+    title: 'Optimization & AI Suggestions',
+    desc: 'Analyze your timetable, detect inefficiencies, and apply AI-powered fixes with a single action.',
+    link: '/ai-scheduling/optimization',
+    gradient: 'from-violet-600 to-purple-700',
+    glow: 'hover:shadow-violet-300/40 dark:hover:shadow-violet-900/50',
+    badgeColor: 'bg-violet-100 dark:bg-violet-900/60 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800',
+    iconBg: 'from-violet-500 to-purple-700',
+    dotColor: 'bg-violet-400',
+  },
+  {
+    id: 'analytics', icon: <FaCalendarCheck />, step: '04',
+    title: 'Final Schedule & Approval',
+    desc: 'Review the AI-generated timetable, validate constraints, fix remaining issues, and finalize for deployment.',
+    link: '/ai-scheduling/analytics',
+    gradient: 'from-emerald-500 to-teal-600',
+    glow: 'hover:shadow-emerald-300/40 dark:hover:shadow-emerald-900/50',
+    badgeColor: 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800',
+    iconBg: 'from-emerald-500 to-teal-600',
+    dotColor: 'bg-emerald-400',
+  },
+];
+
+const HIGHLIGHTS = [
+  { icon: <FaRocket />,      label: 'AI-Powered'     },
+  { icon: <FaShieldAlt />,   label: 'Zero Conflicts'  },
+  { icon: <FaCheckCircle />, label: 'Auto-Optimized'  },
+  { icon: <FaBrain />,       label: 'Smart Insights'  },
+];
+
+const WORKFLOW_STEPS = [
+  { step:'01', color:'bg-blue-600',    label:'Configure Setup',       desc:'Add teachers, subjects, rooms' },
+  { step:'02', color:'bg-amber-500',   label:'Detect Conflicts',       desc:'Find and resolve issues' },
+  { step:'03', color:'bg-violet-600',  label:'Apply AI Optimizations', desc:'AI-powered improvements' },
+  { step:'04', color:'bg-emerald-500', label:'Approve & Deploy',       desc:'Review and publish' },
+];
+
+/* ═══════════════════════════════════════════
+   MAIN INDEX PAGE
+═══════════════════════════════════════════ */
+export default function AISchedulingIndex() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950/20 font-sans">
+
+      {/* ══ Hero ══ */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-indigo-700 via-violet-700 to-blue-800 pt-16 pb-28 px-5 sm:px-8">
+        {/* glow orbs */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute -top-24 -right-24 w-[500px] h-[500px] rounded-full bg-white/5 blur-3xl" />
+          <div className="absolute bottom-0 left-0 w-80 h-80 rounded-full bg-cyan-400/10 blur-3xl" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full bg-violet-500/10 blur-3xl" />
+        </div>
+
+        <div className="relative max-w-5xl mx-auto text-center">
+          {/* badge */}
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="inline-flex items-center gap-2 text-[11px] font-bold tracking-widest uppercase text-indigo-200 bg-white/10 border border-white/20 rounded-full px-4 py-1.5 mb-6"
+          >
+            <HiSparkles className="text-cyan-300" />
+            AI Scheduling Module
+            <span className="relative flex h-2 w-2 ml-1">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+            </span>
+          </motion.div>
+
+          {/* headline */}
+          <motion.h1
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, delay: 0.05 }}
+            className="text-3xl sm:text-5xl font-extrabold text-white mb-4 leading-[1.1] tracking-tight"
+          >
+            Smart Timetable Optimization<br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-blue-300">
+              & AI Scheduling
+            </span>
+          </motion.h1>
+
+          <motion.p
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="text-indigo-200 text-base sm:text-lg max-w-2xl mx-auto leading-relaxed mb-8"
+          >
+            A complete AI-powered workflow to configure, detect conflicts, optimize,
+            and publish your academic timetable — all in one place.
+          </motion.p>
+
+          {/* highlights */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.15 }}
+            className="flex flex-wrap justify-center gap-3 mb-8"
+          >
+            {HIGHLIGHTS.map(({ icon, label }) => (
+              <div key={label} className="flex items-center gap-2 bg-white/10 hover:bg-white/18 border border-white/20 text-white text-sm font-semibold rounded-full px-4 py-2 transition-all duration-200 cursor-default hover:scale-[1.03]">
+                <span className="text-cyan-300">{icon}</span> {label}
+              </div>
+            ))}
+          </motion.div>
+
+          {/* CTA */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.45, delay: 0.2 }}
+          >
+            <Link
+              to="/ai-scheduling/setup"
+              className="inline-flex items-center gap-2 bg-white text-indigo-700 font-extrabold px-8 py-3.5 rounded-2xl shadow-2xl hover:shadow-white/20 hover:-translate-y-1 hover:scale-[1.03] transition-all duration-300 text-sm group"
+            >
+              <FaRocket className="text-indigo-500 group-hover:rotate-12 transition-transform duration-300" />
+              Get Started → Setup
+            </Link>
+          </motion.div>
+        </div>
+      </div>
+
+      {/* ══ Breadcrumb ══ */}
+      <div className="max-w-5xl mx-auto px-5 sm:px-8 py-5">
+        <nav className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+          <Link to="/" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">Home</Link>
+          <span className="opacity-40">/</span>
+          <span className="text-indigo-600 dark:text-indigo-400 font-semibold">AI Scheduling</span>
+        </nav>
+      </div>
+
+      <div className="max-w-5xl mx-auto px-5 sm:px-8 pb-16 space-y-8">
+
+        {/* ══ Workflow Progress Bar ══ */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.1 }}
+          className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl border border-slate-200/70 dark:border-slate-700 shadow-md px-6 py-5"
+        >
+          <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-5 flex items-center gap-2">
+            <span className="inline-block w-4 h-0.5 bg-slate-300 dark:bg-slate-600" />
+            Recommended Workflow
+            <span className="inline-block flex-1 h-0.5 bg-slate-100 dark:bg-slate-700" />
+          </p>
+          <div className="flex items-start gap-0">
+            {WORKFLOW_STEPS.map((ws, i) => (
+              <div key={ws.step} className="flex items-center flex-1 min-w-0">
+                <div className="flex flex-col items-center flex-1 min-w-0 px-1 group cursor-default">
+                  <div className={`w-10 h-10 rounded-full ${ws.color} text-white flex items-center justify-center text-xs font-black mb-2 flex-shrink-0 shadow-md group-hover:scale-110 transition-transform duration-200`}>
+                    {ws.step}
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xs font-bold text-slate-700 dark:text-slate-200 leading-tight">{ws.label}</div>
+                    <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 hidden sm:block leading-tight">{ws.desc}</div>
+                  </div>
+                </div>
+                {i < WORKFLOW_STEPS.length - 1 && (
+                  <div className="flex-shrink-0 mx-0.5 mt-[-14px]">
+                    <div className="w-full h-0.5 bg-gradient-to-r from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 w-4 sm:w-6" />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* ══ Cards Grid ══ */}
+        <div className="grid sm:grid-cols-2 gap-5">
+          {CARDS.map((card, i) => (
+            <motion.div
+              key={card.id}
+              custom={i}
+              variants={fadeUp}
+              initial="hidden"
+              animate="visible"
+            >
+              <Link
+                to={card.link}
+                id={`ai-card-${card.id}`}
+                className={`group relative flex flex-col bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl border border-slate-200/70 dark:border-slate-700/70 shadow-md hover:shadow-2xl hover:-translate-y-2 ${card.glow} transition-all duration-300 overflow-hidden h-full`}
+              >
+                {/* top gradient bar */}
+                <div className={`h-1 w-full bg-gradient-to-r ${card.gradient}`} />
+
+                {/* inner glow on hover */}
+                <div className={`absolute inset-0 bg-gradient-to-br ${card.gradient} opacity-0 group-hover:opacity-[0.03] transition-opacity duration-300 pointer-events-none`} />
+
+                <div className="p-6 flex flex-col flex-1 relative">
+                  <div className="flex items-start justify-between mb-5">
+                    <div className={`w-13 h-13 w-12 h-12 rounded-2xl bg-gradient-to-br ${card.iconBg} text-white flex items-center justify-center text-xl shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}>
+                      {card.icon}
+                    </div>
+                    <span className={`text-[10px] font-black tracking-widest uppercase rounded-full px-2.5 py-1 ${card.badgeColor}`}>
+                      Step {card.step}
+                    </span>
+                  </div>
+
+                  <h2 className="text-base font-extrabold text-slate-800 dark:text-slate-100 mb-2 leading-snug group-hover:text-indigo-700 dark:group-hover:text-indigo-300 transition-colors duration-200">
+                    {card.title}
+                  </h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed flex-1 mb-4">
+                    {card.desc}
+                  </p>
+
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 translate-x-0 group-hover:translate-x-1.5 transition-transform duration-200 opacity-0 group-hover:opacity-100 mt-auto">
+                    Open module <FaArrowRight className="text-[9px]" />
+                  </div>
+                </div>
+              </Link>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* ══ How It Works ══ */}
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, delay: 0.35 }}
+          className="bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-950/40 dark:to-violet-950/40 border border-indigo-100 dark:border-indigo-900/60 rounded-2xl p-6 flex items-start gap-4"
+        >
+          <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/60 rounded-xl flex items-center justify-center text-indigo-600 dark:text-indigo-400 flex-shrink-0 mt-0.5 shadow-sm">
+            <FaBrain />
+          </div>
+          <div>
+            <h3 className="font-bold text-indigo-800 dark:text-indigo-200 mb-1 text-sm">How It Works</h3>
+            <p className="text-sm text-indigo-600 dark:text-indigo-400 leading-relaxed">
+              Start with <strong>Setup</strong> to configure your data → run <strong>Conflict Detection</strong> to find issues →
+              use <strong>Optimization</strong> to apply AI fixes → finalize with <strong>Final Schedule & Approval</strong> to review, validate, and publish.
+            </p>
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  );
+}

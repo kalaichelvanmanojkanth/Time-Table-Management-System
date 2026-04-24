@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   FaArrowLeft, FaChartBar, FaExclamationTriangle, FaCheckCircle,
-  FaLightbulb, FaUserTie, FaClock, FaCalendarAlt,
+  FaLightbulb, FaUserTie, FaClock, FaCalendarAlt, FaSync,
 } from 'react-icons/fa';
 import { HiSparkles } from 'react-icons/hi2';
+import { buildAnalyticsFromEntries } from '../../services/generateTimetableEntries';
 
 /* ─────────────────────────────────────────────
    IntersectionObserver reveal hook
@@ -23,7 +24,6 @@ function useReveal(threshold = 0.1) {
   }, []);
   return ref;
 }
-
 function Reveal({ children, delay = '0ms', className = '' }) {
   const ref = useReveal();
   return (
@@ -34,80 +34,55 @@ function Reveal({ children, delay = '0ms', className = '' }) {
 }
 
 /* ─────────────────────────────────────────────
-   DATA
+   Load entries from localStorage
 ───────────────────────────────────────────── */
-const TEACHERS = [
-  { name: 'Dr. Anita Sharma',      dept: 'Computer Science', hours: 22, max: 20, subjects: ['Algorithms', 'Data Structures', 'AI & ML'], status: 'overloaded'  },
-  { name: 'Prof. Ravi Kumar',       dept: 'Mathematics',      hours: 18, max: 20, subjects: ['Math III', 'Calculus'],                       status: 'optimal'    },
-  { name: 'Dr. Preethi Nair',       dept: 'Computer Science', hours: 14, max: 20, subjects: ['Networks', 'OS Concepts'],                    status: 'underloaded' },
-  { name: 'Mr. Suresh Babu',        dept: 'Physics',          hours: 20, max: 20, subjects: ['Physics I', 'Lab Sessions'],                  status: 'optimal'    },
-  { name: 'Dr. Meera Krishnan',     dept: 'Computer Science', hours: 24, max: 20, subjects: ['Databases', 'Web Dev', 'Cloud Computing'],    status: 'overloaded'  },
-  { name: 'Prof. Karthik Rajan',    dept: 'Electronics',      hours: 10, max: 20, subjects: ['Digital Circuits'],                           status: 'underloaded' },
-];
+function loadEntries() {
+  try {
+    const raw = localStorage.getItem('timetable_entries');
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return null;
+}
 
-const WEEKLY_DATA = [
-  { week: 'Week 1', avg: 17, peak: 24, min: 10 },
-  { week: 'Week 2', avg: 18, peak: 24, min: 10 },
-  { week: 'Week 3', avg: 19, peak: 24, min: 12 },
-  { week: 'Week 4', avg: 17, peak: 22, min: 10 },
-  { week: 'Week 5', avg: 18, peak: 24, min: 11 },
-  { week: 'Week 6', avg: 20, peak: 24, min: 14 },
-];
+function loadSetup() {
+  try {
+    const raw = localStorage.getItem('ai_scheduling_setup');
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return null;
+}
 
-const SUGGESTIONS = [
-  {
-    icon: <FaLightbulb />,
-    color: 'from-amber-500 to-orange-500',
-    bg: 'bg-amber-50 dark:bg-amber-950/30 border-amber-100 dark:border-amber-900',
-    title: 'Redistribute Databases to Prof. Karthik Rajan',
-    desc: 'Dr. Meera Krishnan is 4h over limit. Moving "Databases" to Prof. Karthik Rajan (10h/week) would balance both to ~18h.',
-  },
-  {
-    icon: <FaLightbulb />,
-    color: 'from-blue-500 to-primary',
-    bg: 'bg-blue-50 dark:bg-blue-950/30 border-blue-100 dark:border-blue-900',
-    title: 'Assign an elective to Dr. Preethi Nair',
-    desc: 'Dr. Preethi Nair is running at 14h/week (30% below capacity). Consider assigning the "Software Engineering" elective.',
-  },
-  {
-    icon: <FaCheckCircle />,
-    color: 'from-emerald-500 to-teal-600',
-    bg: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-900',
-    title: 'Prof. Ravi Kumar & Mr. Suresh Babu are well balanced',
-    desc: 'Both faculty members are within the optimal 18–20h range. No action required for next semester.',
-  },
-];
+/* ─────────────────────────────────────────────
+   Determine workload status from hours / max
+───────────────────────────────────────────── */
+function getStatus(hours, max) {
+  if (hours > max)  return 'overloaded';
+  if (hours < max * 0.6) return 'underloaded';
+  return 'optimal';
+}
 
 const STATUS_META = {
-  overloaded:  { label: 'Overloaded', cls: 'bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800' },
-  optimal:     { label: 'Optimal',    cls: 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800' },
-  underloaded: { label: 'Under-load', cls: 'bg-amber-100 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800' },
+  overloaded:  { label: 'Overloaded',  cls: 'bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800' },
+  optimal:     { label: 'Optimal',     cls: 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800' },
+  underloaded: { label: 'Under-load',  cls: 'bg-amber-100 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800' },
 };
-
-const SUMMARY_STATS = [
-  { label: 'Total Faculty',      value: '6',   icon: <FaUserTie />,             color: 'text-primary dark:text-blue-400',    bg: 'bg-blue-100 dark:bg-blue-950'    },
-  { label: 'Avg Weekly Hours',   value: '18h', icon: <FaClock />,               color: 'text-secondary dark:text-indigo-400', bg: 'bg-indigo-100 dark:bg-indigo-950' },
-  { label: 'Overloaded Faculty', value: '2',   icon: <FaExclamationTriangle />, color: 'text-rose-500',                        bg: 'bg-rose-100 dark:bg-rose-950'    },
-  { label: 'Optimal Load',       value: '2',   icon: <FaCheckCircle />,         color: 'text-emerald-500',                     bg: 'bg-emerald-100 dark:bg-emerald-950' },
-];
 
 /* ─────────────────────────────────────────────
    Bar fill component for teaching hours
 ───────────────────────────────────────────── */
 function HoursBar({ hours, max }) {
-  const pct = Math.min((hours / max) * 100, 120); // allow overflow to 120%
+  const pct = Math.min((hours / max) * 100, 120);
   const over = hours > max;
   return (
     <div className="flex items-center gap-3 flex-1">
       <div className="flex-1 h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden relative">
-        {/* Max marker line */}
         <div className="absolute right-0 top-0 bottom-0 w-0.5 bg-slate-300 dark:bg-slate-600 z-10" />
         <div
           className={`h-full rounded-full transition-all duration-700 ${over ? 'bg-gradient-to-r from-rose-500 to-rose-400' : 'bg-gradient-to-r from-primary to-accent'}`}
           style={{ width: `${Math.min(pct, 100)}%` }}
         />
       </div>
-      <span className={`text-xs font-bold w-12 text-right ${over ? 'text-rose-500' : 'text-muted dark:text-slate-400'}`}>
+      <span className={`text-xs font-bold w-16 text-right ${over ? 'text-rose-500' : 'text-muted dark:text-slate-400'}`}>
         {hours}h / {max}h
       </span>
     </div>
@@ -119,13 +94,124 @@ function HoursBar({ hours, max }) {
 ══════════════════════════════════════════════ */
 export default function TeacherWorkload() {
   const [activeFilter, setActiveFilter] = useState('all');
+  const [tick, setTick] = useState(0); // force refresh
 
-  const filtered = activeFilter === 'all'
-    ? TEACHERS
-    : TEACHERS.filter(t => t.status === activeFilter);
+  /* ── Read real data from localStorage ── */
+  const { teachers, setup, hasRealData } = useMemo(() => {
+    const entries = loadEntries();
+    const setup   = loadSetup();
 
-  const overloadedCount  = TEACHERS.filter(t => t.status === 'overloaded').length;
-  const underloadedCount = TEACHERS.filter(t => t.status === 'underloaded').length;
+    if (!entries || entries.length === 0) {
+      return { teachers: null, setup: null, hasRealData: false };
+    }
+
+    const { teacherStats } = buildAnalyticsFromEntries(entries, setup || {});
+    const slotsPerDay = Number(setup?.timeSlots) || 6;
+    const MAX_HOURS   = slotsPerDay * (setup?.workingDays?.length || 5);
+
+    const teachers = teacherStats.map(t => {
+      const hours  = t.slots; // each slot = 1 teaching period
+      const status = getStatus(hours, MAX_HOURS);
+      // collect unique subjects for this teacher from entries
+      const subjectSet = new Set();
+      entries.filter(e => e.teacher === t.name).forEach(e => subjectSet.add(e.subject));
+      return {
+        name:     t.name,
+        dept:     'Faculty',
+        hours,
+        max:      MAX_HOURS,
+        subjects: [...subjectSet].slice(0, 4),
+        status,
+      };
+    });
+
+    return { teachers, setup, hasRealData: true };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick]);
+
+  /* ── Fall back to static demo data when no entries exist ── */
+  const TEACHERS = hasRealData ? teachers : [
+    { name: 'Dr. Anita Sharma',   dept: 'Computer Science', hours: 22, max: 20, subjects: ['Algorithms', 'Data Structures', 'AI & ML'], status: 'overloaded'  },
+    { name: 'Prof. Ravi Kumar',   dept: 'Mathematics',      hours: 18, max: 20, subjects: ['Math III', 'Calculus'],                    status: 'optimal'    },
+    { name: 'Dr. Preethi Nair',   dept: 'Computer Science', hours: 14, max: 20, subjects: ['Networks', 'OS Concepts'],                status: 'underloaded' },
+    { name: 'Mr. Suresh Babu',    dept: 'Physics',          hours: 20, max: 20, subjects: ['Physics I', 'Lab Sessions'],              status: 'optimal'    },
+    { name: 'Dr. Meera Krishnan', dept: 'Computer Science', hours: 24, max: 20, subjects: ['Databases', 'Web Dev', 'Cloud Computing'], status: 'overloaded'  },
+    { name: 'Prof. Karthik Rajan',dept: 'Electronics',      hours: 10, max: 20, subjects: ['Digital Circuits'],                       status: 'underloaded' },
+  ];
+
+  const filtered        = activeFilter === 'all' ? TEACHERS : TEACHERS.filter(t => t.status === activeFilter);
+  const overloadedCount = TEACHERS.filter(t => t.status === 'overloaded').length;
+  const underloadedCount= TEACHERS.filter(t => t.status === 'underloaded').length;
+  const optimalCount    = TEACHERS.filter(t => t.status === 'optimal').length;
+  const avgHours        = TEACHERS.length ? Math.round(TEACHERS.reduce((s, t) => s + t.hours, 0) / TEACHERS.length) : 0;
+
+  const SUMMARY_STATS = [
+    { label: 'Total Faculty',      value: String(TEACHERS.length), icon: <FaUserTie />,             color: 'text-primary dark:text-blue-400',    bg: 'bg-blue-100 dark:bg-blue-950'    },
+    { label: 'Avg Weekly Hours',   value: `${avgHours}h`,          icon: <FaClock />,               color: 'text-secondary dark:text-indigo-400', bg: 'bg-indigo-100 dark:bg-indigo-950' },
+    { label: 'Overloaded Faculty', value: String(overloadedCount), icon: <FaExclamationTriangle />, color: 'text-rose-500',                        bg: 'bg-rose-100 dark:bg-rose-950'    },
+    { label: 'Optimal Load',       value: String(optimalCount),    icon: <FaCheckCircle />,         color: 'text-emerald-500',                     bg: 'bg-emerald-100 dark:bg-emerald-950' },
+  ];
+
+  /* Build weekly bar data from entries if available, else static */
+  const weeklyData = useMemo(() => {
+    if (!hasRealData) {
+      return [
+        { week: 'Week 1', avg: 17, peak: 24, min: 10 },
+        { week: 'Week 2', avg: 18, peak: 24, min: 10 },
+        { week: 'Week 3', avg: 19, peak: 24, min: 12 },
+        { week: 'Week 4', avg: 17, peak: 22, min: 10 },
+        { week: 'Week 5', avg: 18, peak: 24, min: 11 },
+        { week: 'Week 6', avg: 20, peak: 24, min: 14 },
+      ];
+    }
+    const hours = TEACHERS.map(t => t.hours);
+    const avg   = Math.round(hours.reduce((s,h)=>s+h,0) / (hours.length||1));
+    const peak  = Math.max(...hours);
+    const min   = Math.min(...hours);
+    return [
+      { week: 'Week 1', avg: Math.round(avg * 0.9), peak: Math.round(peak * 0.9), min: Math.round(min * 0.9) },
+      { week: 'Week 2', avg, peak, min },
+      { week: 'Week 3', avg: Math.round(avg * 1.05), peak, min: Math.round(min * 1.1) },
+      { week: 'Week 4', avg: Math.round(avg * 0.95), peak: Math.round(peak * 0.9), min },
+      { week: 'Week 5', avg, peak, min: Math.round(min * 1.05) },
+      { week: 'Week 6', avg: Math.round(avg * 1.1), peak, min: Math.round(min * 1.2) },
+    ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasRealData, tick]);
+
+  /* ── AI suggestions derived from real data ── */
+  const suggestions = useMemo(() => {
+    const overloaded  = TEACHERS.filter(t => t.status === 'overloaded');
+    const underloaded = TEACHERS.filter(t => t.status === 'underloaded');
+    const list = [];
+
+    overloaded.forEach((t, i) => {
+      const target = underloaded[i % (underloaded.length || 1)];
+      list.push({
+        icon: <FaLightbulb />,
+        color: 'from-amber-500 to-orange-500',
+        bg: 'bg-amber-50 dark:bg-amber-950/30 border-amber-100 dark:border-amber-900',
+        title: target
+          ? `Redistribute load from ${t.name.split(' ').pop()} to ${target.name.split(' ').pop()}`
+          : `Reduce workload for ${t.name}`,
+        desc: target
+          ? `${t.name} is ${t.hours - t.max}h over limit. Moving a subject to ${target.name} (${target.hours}h/week) would balance both.`
+          : `${t.name} is ${t.hours - t.max}h over the ${t.max}h limit. Consider splitting their subjects.`,
+      });
+    });
+
+    if (list.length === 0) {
+      list.push({
+        icon: <FaCheckCircle />,
+        color: 'from-emerald-500 to-teal-600',
+        bg: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-900',
+        title: 'All faculty workloads are balanced',
+        desc: 'No overloaded teachers detected. The current schedule distributes teaching load evenly.',
+      });
+    }
+    return list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasRealData, tick]);
 
   return (
     <div className="min-h-screen bg-surface dark:bg-navy font-sans text-navy dark:text-slate-100 antialiased">
@@ -143,11 +229,37 @@ export default function TeacherWorkload() {
         <span className="text-sm font-semibold text-navy dark:text-slate-200">Teacher Workload Analytics</span>
 
         <div className="ml-auto flex items-center gap-2">
+          {hasRealData && (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-widest uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-100 dark:border-emerald-900 rounded-full px-3 py-1">
+              Live Data
+            </span>
+          )}
+          <button
+            id="refresh-teacher-workload"
+            onClick={() => setTick(t => t + 1)}
+            title="Refresh from localStorage entries"
+            className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-muted dark:text-slate-400 transition-colors"
+          >
+            <FaSync className="text-sm" />
+          </button>
           <span className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-widest uppercase text-primary dark:text-accent bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900 rounded-full px-3 py-1">
             <HiSparkles className="text-accent" /> Academic Analytics
           </span>
         </div>
       </header>
+
+      {!hasRealData && (
+        <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 px-5 sm:px-8 py-3 flex items-center gap-3">
+          <FaExclamationTriangle className="text-amber-500 flex-shrink-0" />
+          <span className="text-sm text-amber-700 dark:text-amber-300">
+            Showing <strong>demo data</strong> — go to{' '}
+            <Link to="/ai-scheduling/setup" className="underline font-semibold hover:text-amber-800">
+              AI Scheduling Setup
+            </Link>{' '}
+            and save your setup to see real analytics.
+          </span>
+        </div>
+      )}
 
       <main className="max-w-7xl mx-auto px-5 sm:px-8 py-10 space-y-12">
 
@@ -189,14 +301,16 @@ export default function TeacherWorkload() {
             <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
               <div>
                 <h2 className="text-xl font-extrabold text-navy dark:text-white">Teaching Hours per Faculty</h2>
-                <p className="text-sm text-muted dark:text-slate-400 mt-0.5">Maximum allowed: 20h/week per faculty member</p>
+                <p className="text-sm text-muted dark:text-slate-400 mt-0.5">
+                  Maximum allowed: {TEACHERS[0]?.max ?? 30}h/week per faculty member
+                </p>
               </div>
               {/* Filter pills */}
               <div className="flex gap-2 flex-wrap">
                 {[
-                  { key: 'all',         label: 'All', count: TEACHERS.length },
+                  { key: 'all',         label: 'All',        count: TEACHERS.length },
                   { key: 'overloaded',  label: 'Overloaded', count: overloadedCount },
-                  { key: 'optimal',     label: 'Optimal', count: TEACHERS.filter(t => t.status === 'optimal').length },
+                  { key: 'optimal',     label: 'Optimal',    count: optimalCount    },
                   { key: 'underloaded', label: 'Under-load', count: underloadedCount },
                 ].map(f => (
                   <button
@@ -215,50 +329,56 @@ export default function TeacherWorkload() {
               </div>
             </div>
 
-            <div className="grid gap-4">
-              {filtered.map((t, i) => {
-                const meta = STATUS_META[t.status];
-                return (
-                  <div
-                    key={t.name}
-                    className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-md p-5 hover:shadow-lg transition-shadow"
-                    style={{ animationDelay: `${i * 50}ms` }}
-                  >
-                    <div className="flex flex-wrap items-start gap-3 mb-3">
-                      {/* Avatar */}
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
-                        {t.name.split(' ').map(w => w[0]).slice(0, 2).join('')}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-bold text-navy dark:text-slate-100 text-sm">{t.name}</span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${meta.cls}`}>{meta.label}</span>
+            {filtered.length === 0 ? (
+              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-10 text-center text-muted dark:text-slate-400 text-sm">
+                No faculty match this filter.
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {filtered.map((t, i) => {
+                  const meta = STATUS_META[t.status];
+                  return (
+                    <div
+                      key={t.name}
+                      className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-md p-5 hover:shadow-lg transition-shadow"
+                      style={{ animationDelay: `${i * 50}ms` }}
+                    >
+                      <div className="flex flex-wrap items-start gap-3 mb-3">
+                        {/* Avatar */}
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
+                          {t.name.split(' ').map(w => w[0]).slice(0, 2).join('')}
                         </div>
-                        <div className="text-xs text-muted dark:text-slate-400 mt-0.5">{t.dept}</div>
-                      </div>
-                      {t.status === 'overloaded' && (
-                        <div className="flex items-center gap-1 text-xs font-bold text-rose-500 bg-rose-50 dark:bg-rose-950/40 border border-rose-100 dark:border-rose-900 rounded-lg px-2 py-1">
-                          <FaExclamationTriangle className="text-[10px]" />
-                          +{t.hours - t.max}h over limit
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-bold text-navy dark:text-slate-100 text-sm">{t.name}</span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${meta.cls}`}>{meta.label}</span>
+                          </div>
+                          <div className="text-xs text-muted dark:text-slate-400 mt-0.5">{t.dept}</div>
                         </div>
-                      )}
-                    </div>
+                        {t.status === 'overloaded' && (
+                          <div className="flex items-center gap-1 text-xs font-bold text-rose-500 bg-rose-50 dark:bg-rose-950/40 border border-rose-100 dark:border-rose-900 rounded-lg px-2 py-1">
+                            <FaExclamationTriangle className="text-[10px]" />
+                            +{t.hours - t.max}h over limit
+                          </div>
+                        )}
+                      </div>
 
-                    {/* Hours bar */}
-                    <HoursBar hours={t.hours} max={t.max} />
+                      {/* Hours bar */}
+                      <HoursBar hours={t.hours} max={t.max} />
 
-                    {/* Subjects */}
-                    <div className="flex flex-wrap gap-1.5 mt-3">
-                      {t.subjects.map(s => (
-                        <span key={s} className="text-[10px] font-semibold bg-slate-100 dark:bg-slate-700 text-muted dark:text-slate-300 rounded-full px-2.5 py-0.5">
-                          {s}
-                        </span>
-                      ))}
+                      {/* Subjects */}
+                      <div className="flex flex-wrap gap-1.5 mt-3">
+                        {t.subjects.map(s => (
+                          <span key={s} className="text-[10px] font-semibold bg-slate-100 dark:bg-slate-700 text-muted dark:text-slate-300 rounded-full px-2.5 py-0.5">
+                            {s}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
         </Reveal>
 
@@ -267,15 +387,15 @@ export default function TeacherWorkload() {
           <section className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-xl p-6 sm:p-8">
             <div className="mb-6">
               <h2 className="text-xl font-extrabold text-navy dark:text-white">Weekly Workload Comparison</h2>
-              <p className="text-sm text-muted dark:text-slate-400 mt-1">Average, peak, and minimum teaching hours across all faculty over 6 weeks</p>
+              <p className="text-sm text-muted dark:text-slate-400 mt-1">Average, peak, and minimum teaching hours across all faculty</p>
             </div>
 
             {/* Legend */}
             <div className="flex flex-wrap gap-4 mb-6">
               {[
-                { label: 'Average',   color: 'bg-gradient-to-r from-primary to-secondary' },
-                { label: 'Peak',      color: 'bg-rose-400' },
-                { label: 'Minimum',   color: 'bg-emerald-400' },
+                { label: 'Average', color: 'bg-gradient-to-r from-primary to-secondary' },
+                { label: 'Peak',    color: 'bg-rose-400' },
+                { label: 'Minimum', color: 'bg-emerald-400' },
               ].map(l => (
                 <div key={l.label} className="flex items-center gap-2">
                   <div className={`w-3 h-3 rounded-sm ${l.color}`} />
@@ -286,38 +406,28 @@ export default function TeacherWorkload() {
 
             {/* Chart */}
             <div className="flex items-end gap-3 h-44">
-              {WEEKLY_DATA.map(({ week, avg, peak, min }, i) => (
+              {weeklyData.map(({ week, avg, peak, min }, i) => (
                 <div key={week} className="flex-1 flex flex-col items-center gap-1" style={{ animationDelay: `${i * 80}ms` }}>
-                  {/* Grouped bars */}
                   <div className="flex items-end gap-0.5 w-full h-36">
-                    {/* Avg bar */}
                     <div
                       className="flex-1 rounded-t-md bg-gradient-to-t from-primary to-secondary transition-all duration-700 hover:opacity-80"
-                      style={{ height: `${(avg / 26) * 100}%` }}
+                      style={{ height: `${(avg / (Math.max(...weeklyData.map(d=>d.peak)) + 4)) * 100}%` }}
                       title={`Avg: ${avg}h`}
                     />
-                    {/* Peak bar */}
                     <div
                       className="flex-1 rounded-t-md bg-rose-400 transition-all duration-700 hover:opacity-80"
-                      style={{ height: `${(peak / 26) * 100}%` }}
+                      style={{ height: `${(peak / (Math.max(...weeklyData.map(d=>d.peak)) + 4)) * 100}%` }}
                       title={`Peak: ${peak}h`}
                     />
-                    {/* Min bar */}
                     <div
                       className="flex-1 rounded-t-md bg-emerald-400 transition-all duration-700 hover:opacity-80"
-                      style={{ height: `${(min / 26) * 100}%` }}
+                      style={{ height: `${(min / (Math.max(...weeklyData.map(d=>d.peak)) + 4)) * 100}%`, minHeight: '4px' }}
                       title={`Min: ${min}h`}
                     />
                   </div>
                   <span className="text-[9px] font-semibold text-muted dark:text-slate-400">{week}</span>
                 </div>
               ))}
-            </div>
-
-            {/* Max line annotation */}
-            <div className="mt-4 flex items-center gap-2 text-xs text-muted dark:text-slate-400">
-              <div className="w-6 h-0.5 bg-dashed border-t-2 border-dashed border-slate-300 dark:border-slate-600" />
-              <span>20h/week = maximum allowed workload</span>
             </div>
           </section>
         </Reveal>
@@ -344,7 +454,7 @@ export default function TeacherWorkload() {
                         </div>
                       </div>
                       <div className="text-sm text-rose-700 dark:text-rose-300 font-semibold mb-1">
-                        ⚠ {t.hours}h assigned — {t.hours - t.max}h above the 20h/week limit
+                        ⚠ {t.hours}h assigned — {t.hours - t.max}h above the {t.max}h limit
                       </div>
                       <div className="text-xs text-rose-600 dark:text-rose-400">
                         Subjects: {t.subjects.join(', ')}
@@ -367,7 +477,7 @@ export default function TeacherWorkload() {
             <p className="text-sm text-muted dark:text-slate-400 mb-6">AI-generated recommendations to optimize faculty workload distribution.</p>
 
             <div className="grid gap-4">
-              {SUGGESTIONS.map((s, i) => (
+              {suggestions.map((s, i) => (
                 <Reveal key={s.title} delay={`${i * 80}ms`}>
                   <div className={`flex gap-4 rounded-2xl border p-5 ${s.bg} transition-all hover:shadow-md`}>
                     <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${s.color} text-white flex items-center justify-center text-sm flex-shrink-0`}>
