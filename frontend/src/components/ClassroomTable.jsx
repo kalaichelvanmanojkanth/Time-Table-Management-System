@@ -1,11 +1,10 @@
-function ClassroomTable({
-  classrooms,
-  deletingId,
-  onDelete,
-  onEdit,
-  readOnly = false,
-  maintenanceRooms = [],
-}) {
+const statusLabel = (status = '') => {
+  const normalized = String(status).trim().toLowerCase();
+  if (!normalized) return '';
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+};
+
+function ClassroomTable({ classrooms, deletingId, onDelete, onEdit, readOnly = false, maintenanceRooms = [] }) {
   return (
     <section className="panel table-panel">
       <div className="panel-header compact">
@@ -36,7 +35,7 @@ function ClassroomTable({
                     <strong>{room.roomName}</strong>
                     <p className="maintenance-meta">{room.building}</p>
                   </div>
-                  <span className="status-badge maintenance">maintenance</span>
+                  <span className="status-badge maintenance">Maintenance</span>
                 </article>
               ))}
             </div>
@@ -60,7 +59,7 @@ function ClassroomTable({
           <tbody>
             {classrooms.length === 0 ? (
               <tr>
-                <td className="empty-state" colSpan={readOnly ? "6" : "7"}>
+                <td className="empty-state" colSpan={7}>
                   No classrooms match the current filters.
                 </td>
               </tr>
@@ -77,17 +76,19 @@ function ClassroomTable({
                   </td>
                   <td>
                     <div className="resource-list">
-                      {(classroom.resources || []).length > 0
-                        ? classroom.resources.map((resource) => (
-                            <span className="resource-tag" key={resource}>
-                              {resource}
-                            </span>
-                          ))
-                        : <span className="muted">No resources</span>}
+                      {(classroom.resources || []).length > 0 ? (
+                        classroom.resources.map((resource) => (
+                          <span className="resource-tag" key={resource}>
+                            {resource}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="muted">No resources</span>
+                      )}
                     </div>
                   </td>
                   <td>
-                    <span className={`status-badge ${classroom.status}`}>{classroom.status}</span>
+                    <span className={`status-badge ${classroom.status}`}>{statusLabel(classroom.status)}</span>
                   </td>
                   {!readOnly ? (
                     <td>
@@ -95,13 +96,8 @@ function ClassroomTable({
                         <button className="button ghost" onClick={() => onEdit(classroom)} type="button">
                           Edit
                         </button>
-                        <button
-                          className="button danger"
-                          disabled={deletingId === classroom._id}
-                          onClick={() => onDelete(classroom)}
-                          type="button"
-                        >
-                          {deletingId === classroom._id ? "Deleting..." : "Delete"}
+                        <button className="button danger" disabled={deletingId === classroom._id} onClick={() => onDelete(classroom)} type="button">
+                          {deletingId === classroom._id ? 'Deleting...' : 'Delete'}
                         </button>
                       </div>
                     </td>

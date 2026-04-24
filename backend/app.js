@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
@@ -8,17 +9,49 @@ const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
 
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  'http://localhost:5176',
-  'http://127.0.0.1:5176',
-];
+const parseAllowedOrigins = () => {
+  const configuredOrigins = process.env.CORS_ALLOWED_ORIGINS;
+  if (!configuredOrigins) {
+    return [];
+  }
+
+  return configuredOrigins
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+};
+
+const allowedOrigins = parseAllowedOrigins();
+
+const isAllowedDevOrigin = (origin) => {
+  try {
+    const { hostname, protocol } = new URL(origin);
+    const isHttp = protocol === 'http:' || protocol === 'https:';
+    const isLocalHost =
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '0.0.0.0';
+    const isPrivateNetworkHost =
+      /^10\.\d+\.\d+\.\d+$/.test(hostname) ||
+      /^192\.168\.\d+\.\d+$/.test(hostname) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(hostname);
+
+    return isHttp && (isLocalHost || isPrivateNetworkHost);
+  } catch (error) {
+    return false;
+  }
+};
 
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (origin && allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      // Allow local frontend dev servers regardless of the exact Vite port.
+      if (!origin || isAllowedDevOrigin(origin)) {
         callback(null, true);
         return;
       }
@@ -26,6 +59,8 @@ app.use(
       callback(new Error('Not allowed by CORS'));
     },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    optionsSuccessStatus: 204,
   })
 );
 app.use(express.json());
@@ -62,6 +97,23 @@ app.use('/api/lecturers', require('./routes/lecturerRoutes'));
 app.use('/api/rooms', require('./routes/roomRoutes'));
 app.use('/api/timeslots', require('./routes/timeslotRoutes'));
 app.use('/api/timetables', require('./routes/timetableRoutes'));
+
+// AI Scheduling Routes
+app.use('/api/schedule',    require('./routes/scheduleRoutes'));
+app.use('/api/ai',          require('./routes/aiRoutes'));
+app.use('/api/ai-setup',    require('./routes/aiSetupRoutes'));
+
+// Resource routes (Teachers, Subjects, Rooms — from HEAD)
+const { teacherRouter, subjectRouter, roomRouter, resourceRouter } = require('./routes/resourceRoutes');
+app.use('/api/teachers',  teacherRouter);
+app.use('/api/subjects',  subjectRouter);
+// Note: /api/rooms is already mapped to roomRoutes. We should avoid duplicate mounting if roomRoutes is sufficient, but we might break AI setup if we don't.
+// Let's comment my roomRouter to see if it works, or map it to something else if needed. Wait, my code expects /api/rooms for AI Setup Room CRUD!
+// But `main` already has `app.use('/api/rooms', require('./routes/roomRoutes'));`.
+// I will mount HEAD's rooms here but wait... I'll check `frontend` to see what it calls. `api/rooms` is what frontend calls for both!
+// Actually let's just mount resourceRouter and the specific routers.
+app.use('/api/ai-rooms', roomRouter); // avoiding namespace collision 
+app.use('/api/resource',  resourceRouter);
 
 if (process.env.NODE_ENV === 'production') {
   const clientDistPath = path.join(__dirname, '..', 'frontend', 'dist');

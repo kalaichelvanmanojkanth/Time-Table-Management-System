@@ -37,6 +37,7 @@ Frontend runs on `http://localhost:5173` and proxies API requests to `http://loc
 - `PORT` (default: `5000`)
 - `MONGODB_URI` (required)
 - `NODE_ENV` (optional, `development` or `production`)
+- `CORS_ALLOWED_ORIGINS` (optional, comma-separated list like `https://myapp.com,https://admin.myapp.com`)
 
 ## API Endpoints
 
@@ -49,6 +50,13 @@ Base URL: `/api/classrooms`
 - `DELETE /api/classrooms/:id` -> Delete classroom
 - `POST /api/classrooms/ai/chat` -> Classroom AI bot chat endpoint
 - `GET /api/health` -> Health check
+
+Auth:
+
+- `POST /api/auth/login` -> Login
+- `POST /api/auth/register` -> Register
+- `POST /api/auth/forgot-password` -> Generate reset token
+- `POST /api/auth/reset-password/:token` -> Set new password
 
 ## Classroom Payload Example
 

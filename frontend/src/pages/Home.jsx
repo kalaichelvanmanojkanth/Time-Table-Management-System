@@ -91,6 +91,10 @@ const FEATURES = [
     color: 'from-blue-600 to-blue-800',
     glow: 'group-hover:shadow-[0_0_24px_rgba(30,58,138,0.25)]',
     ring: 'group-hover:ring-blue-300 dark:group-hover:ring-blue-700',
+    // Integration: keep the existing Home card UI and route it to the timetable output page.
+    link: '/timetable/view',
+    linkLabel: 'Open Timetable',
+    linkId: 'feature-timetable-link',
   },
   {
     icon: <FaBrain />,
@@ -99,6 +103,7 @@ const FEATURES = [
     color: 'from-secondary to-violet-700',
     glow: 'group-hover:shadow-[0_0_24px_rgba(99,102,241,0.3)]',
     ring: 'group-hover:ring-indigo-300 dark:group-hover:ring-indigo-700',
+    link: '/ai-scheduling',
   },
   {
     icon: <FaChartBar />,
@@ -108,6 +113,8 @@ const FEATURES = [
     glow: 'group-hover:shadow-[0_0_24px_rgba(34,211,238,0.3)]',
     ring: 'group-hover:ring-cyan-300 dark:group-hover:ring-cyan-700',
     link: '/analytics',
+    linkLabel: 'View Analytics',
+    linkId: 'feature-analytics-link',
   },
   {
     icon: <FaBuilding />,
@@ -116,6 +123,7 @@ const FEATURES = [
     color: 'from-emerald-500 to-teal-600',
     glow: 'group-hover:shadow-[0_0_24px_rgba(16,185,129,0.25)]',
     ring: 'group-hover:ring-emerald-300 dark:group-hover:ring-emerald-700',
+    link: '/user',
   },
 ];
 
@@ -217,6 +225,7 @@ function TimetableMock() {
           {DAYS.map(day => {
             const cell = SCHEDULE[day]?.[slot];
             return cell ? (
+          
               <div key={day} className={`rounded-lg border-l-[3px] px-2 py-1.5 ${cell.tw} hover:scale-[1.03] transition-transform duration-200 cursor-default`}>
                 <div className="text-[10px] font-bold leading-tight truncate">{cell.label}</div>
                 <div className="text-[9px] opacity-60 mt-0.5">{cell.room}</div>
@@ -234,7 +243,18 @@ function TimetableMock() {
 /* ─────────────────────────────────────────────
    Feature Card
 ───────────────────────────────────────────── */
-function FeatureCard({ icon, title, desc, color, glow, ring, link, delay }) {
+function FeatureCard({
+  icon,
+  title,
+  desc,
+  color,
+  glow,
+  ring,
+  link,
+  linkLabel = 'Open Module',
+  linkId,
+  delay,
+}) {
   const cardContent = (
     <div className={`group relative bg-white dark:bg-slate-800 rounded-2xl p-7 border border-slate-100 dark:border-slate-700 shadow-md hover:-translate-y-2 hover:shadow-xl transition-all duration-300 ${link ? 'cursor-pointer' : 'cursor-default'} ring-1 ring-transparent ${ring} ${glow} h-full`}>
       <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-br from-white dark:from-slate-800 via-white dark:via-slate-800 to-blue-50 dark:to-blue-950/30 pointer-events-none" />
@@ -245,7 +265,7 @@ function FeatureCard({ icon, title, desc, color, glow, ring, link, delay }) {
       <p className="relative text-muted dark:text-slate-400 text-sm leading-relaxed">{desc}</p>
       {link && (
         <div className="relative mt-4 flex items-center gap-1 text-xs font-bold text-primary dark:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-          View Analytics →
+          {linkLabel || (link === '/ai-scheduling' ? 'AI Scheduling' : 'View Analytics')} →
         </div>
       )}
     </div>
@@ -254,7 +274,7 @@ function FeatureCard({ icon, title, desc, color, glow, ring, link, delay }) {
   return (
     <Reveal delay={delay}>
       {link
-        ? <Link to={link} className="block" id="feature-analytics-link">{cardContent}</Link>
+        ? <Link to={link} className="block" id={linkId || `feature-card-link-${link.replace(/\//g, '-').slice(1)}`}>{cardContent}</Link>
         : cardContent
       }
     </Reveal>
@@ -325,6 +345,26 @@ const Home = () => {
 
   const NAV_LINKS = ['Home', 'Features', 'How It Works', 'Dashboard', 'About', 'Contact'];
 
+  // Keep the existing Home UI, but make the current in-page nav reliably scroll
+  // to the requested section instead of depending on "#" alone.
+  const handleSectionNavigation = (label, shouldCloseMenu = false) => (event) => {
+    const sectionId =
+      label === 'Home' ? null : `#${label.toLowerCase().replace(/\s+/g, '-')}`;
+    const targetSection = sectionId ? document.querySelector(sectionId) : null;
+
+    event.preventDefault();
+
+    if (targetSection) {
+      targetSection.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    if (shouldCloseMenu) {
+      setMobileMenuOpen(false);
+    }
+  };
+
   return (
     <div className="font-sans bg-surface dark:bg-navy text-navy dark:text-slate-100 antialiased overflow-x-hidden transition-colors duration-300">
 
@@ -347,6 +387,7 @@ const Home = () => {
               <a
                 key={l}
                 href={l === 'Home' ? '#' : `#${l.toLowerCase().replace(/\s+/g, '-')}`}
+                onClick={handleSectionNavigation(l)}
                 className="px-3 py-2 text-sm font-medium text-muted dark:text-slate-400 hover:text-primary dark:hover:text-blue-400 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-all duration-200"
               >
                 {l}
@@ -399,7 +440,7 @@ const Home = () => {
                 key={l}
                 href={l === 'Home' ? '#' : `#${l.toLowerCase().replace(/\s+/g, '-')}`}
                 className="py-2 text-sm font-medium text-muted dark:text-slate-400 hover:text-primary dark:hover:text-blue-400"
-                onClick={() => setMobileMenuOpen(false)}
+                onClick={handleSectionNavigation(l, true)}
               >
                 {l}
               </a>
@@ -821,6 +862,7 @@ const Home = () => {
                     key={label}
                     href={href}
                     id={`footer-${label.toLowerCase().replace(/\s+/g, '-')}`}
+                    onClick={handleSectionNavigation(label)}
                     className="text-sm text-slate-400 hover:text-white transition-colors duration-200"
                   >
                     {label}

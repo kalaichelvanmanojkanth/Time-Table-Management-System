@@ -10,8 +10,7 @@ const {
 const { DAY_VALUES, TIME_PATTERN } = require('./timetableHelpers');
 
 const router = express.Router();
-
-router.use(protect);
+const protectedWrite = [protect];
 
 const toMinutes = (value) => {
   const [hours, minutes] = value.split(':').map(Number);
@@ -79,6 +78,7 @@ router.get(
 
 router.post(
   '/',
+  protectedWrite,
   timeSlotValidation,
   asyncHandler(async (req, res) => {
     if (handleValidationErrors(req, res)) {
@@ -97,7 +97,7 @@ router.post(
 
 router.put(
   '/:id',
-  [...idValidation, ...timeSlotValidation],
+  [...protectedWrite, ...idValidation, ...timeSlotValidation],
   asyncHandler(async (req, res) => {
     if (handleValidationErrors(req, res)) {
       return;
@@ -123,7 +123,7 @@ router.put(
 
 router.delete(
   '/:id',
-  idValidation,
+  [...protectedWrite, ...idValidation],
   asyncHandler(async (req, res) => {
     if (handleValidationErrors(req, res)) {
       return;

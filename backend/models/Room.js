@@ -20,6 +20,7 @@ const roomSchema = new mongoose.Schema(
       type: Number,
       required: [true, 'Room capacity is required'],
       min: [1, 'Room capacity must be at least 1'],
+      default: 0,
       validate: {
         validator: Number.isInteger,
         message: 'Room capacity must be an integer',
@@ -35,6 +36,12 @@ const roomSchema = new mongoose.Schema(
         'Room type can only contain letters, spaces, ampersands, slashes, and hyphens',
       ],
     },
+    status: {
+      type: String,
+      default: 'available',
+    },
+    building: { type: String, trim: true, default: '' },
+    isActive: { type: Boolean, default: true },
   },
   {
     timestamps: true,

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import { FaEnvelope, FaLock, FaSignInAlt } from 'react-icons/fa';
+import getApiErrorMessage from '../utils/getApiErrorMessage';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -26,9 +27,7 @@ const Login = () => {
       toast.success('Login successful!');
       navigate('/timetable');
     } catch (error) {
-      toast.error(
-        error.response?.data?.message || 'Login failed. Please try again.'
-      );
+      toast.error(getApiErrorMessage(error, 'Login failed. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -84,6 +83,9 @@ const Login = () => {
         </form>
 
         <div className="auth-footer">
+          <p>
+            Forgot password? <Link to="/forgot-password">Reset it here</Link>
+          </p>
           <p>
             Don't have an account?{' '}
             <Link to="/register">Create one here</Link>

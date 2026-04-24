@@ -1,9 +1,9 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { FaCalendarAlt, FaPlus, FaSignOutAlt, FaTable, FaUser } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import './TimeTableModule.css';
 
-const navItems = [
+const adminNavItems = [
   {
     label: 'Dashboard',
     to: '/timetable',
@@ -21,9 +21,24 @@ const navItems = [
   },
 ];
 
-const TimeTableLayout = ({ title, description, actions, children }) => {
+const TimeTableLayout = ({
+  title,
+  description,
+  actions,
+  children,
+  readOnly = false,
+}) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const navItems = readOnly
+    ? [
+        {
+          label: 'View Schedule',
+          to: '/timetable/view',
+          icon: <FaTable />,
+        },
+      ]
+    : adminNavItems;
 
   const handleLogout = () => {
     logout();
@@ -48,17 +63,30 @@ const TimeTableLayout = ({ title, description, actions, children }) => {
           </div>
 
           <div className="timetable-userbar">
-            <div className="timetable-user-chip">
-              <FaUser />
-              <span>{user?.name}</span>
-            </div>
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={handleLogout}
-            >
-              <FaSignOutAlt /> Logout
-            </button>
+            {user ? (
+              <>
+                <div className="timetable-user-chip">
+                  <FaUser />
+                  <span>{user.name}</span>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={handleLogout}
+                >
+                  <FaSignOutAlt /> Logout
+                </button>
+              </>
+            ) : (
+              <>
+                <Link to="/" className="btn btn-outline btn-sm">
+                  Home
+                </Link>
+                <Link to="/login" className="btn btn-primary btn-sm">
+                  Admin Login
+                </Link>
+              </>
+            )}
           </div>
         </div>
 

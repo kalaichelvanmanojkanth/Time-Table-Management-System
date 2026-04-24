@@ -113,7 +113,6 @@ const CreateTimeTable = () => {
       toast.success('Entry saved. Continue with your next session.');
       return createdEntry;
     }
-
     toast.success('Timetable entry created successfully.');
     navigate(`/timetable/view?week=${encodeURIComponent(formData.week)}`, {
       state: { createdEntry },
